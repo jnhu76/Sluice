@@ -1,0 +1,50 @@
+=== sha256 ===
+noring /tmp/621-p1-build/noring/linux/x86_64/release/bench_w01_direct 4d4a948ac27d8b309212f072208b69c466a5c4f235a0609cb93834e9aa746e9b
+noring /tmp/621-p1-build/noring/linux/x86_64/release/bench_w02_pipeline edb76b108f01dd5c325a6ec5aab4319533d1a256b6e62af958ea09994793b426
+noring /tmp/621-p1-build/noring/linux/x86_64/release/bench_w03_external_loop 6c1d2a8faa73166949b0ebc1513b39d274f398eb9a4febe00e34a62c0bbee941
+ring /tmp/621-p1-build/ring/linux/x86_64/release/bench_w01_direct 4d4a948ac27d8b309212f072208b69c466a5c4f235a0609cb93834e9aa746e9b
+ring /tmp/621-p1-build/ring/linux/x86_64/release/bench_w02_pipeline 03dbef098d41e6d6a5280a46d46758ca7267326925ae95d1156ad8d8c3c6a896
+ring /tmp/621-p1-build/ring/linux/x86_64/release/bench_w03_external_loop 43054fcd59f7000553d34a2f5b2909ff7ae6dae78910d4f379a8e8b0129937c1
+=== readelf -d NEEDED (ring) ===
+--- bench_w01_direct
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+--- bench_w02_pipeline
+ 0x0000000000000001 (NEEDED)             Shared library: [liburing.so.2]
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+--- bench_w03_external_loop
+ 0x0000000000000001 (NEEDED)             Shared library: [liburing.so.2]
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+=== readelf -d NEEDED (noring) ===
+--- bench_w01_direct
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+--- bench_w02_pipeline
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+--- bench_w03_external_loop
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+=== assertions ===
+ok: ring bench_w02_pipeline links liburing
+ok: noring bench_w02_pipeline does not link liburing
+ok: ring bench_w03_external_loop links liburing
+ok: noring bench_w03_external_loop does not link liburing
+=== profile-difference assertions ===
+ok: bench_w02_pipeline differs across profiles
+ok: bench_w03_external_loop differs across profiles
+ok: bench_w01_direct identical across profiles

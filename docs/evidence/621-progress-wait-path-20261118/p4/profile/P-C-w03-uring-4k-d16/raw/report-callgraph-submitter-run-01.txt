@@ -1,0 +1,1292 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 29K of event 'cycles'
+# Event count (approx.): 12992695735
+#
+# Children      Self  Command          Shared Object            Symbol                                                                                                                                                                                                                                                                                                                                                                   
+# ........  ........  ...............  .......................  .........................................................................................................................................................................................................................................................................................................................................................................
+#
+    46.72%     0.91%  bench_w03_exter  bench_w03_external_loop  [.] (anonymous namespace)::run_external_phase((anonymous namespace)::LoopParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)
+            |          
+            |--45.81%--(anonymous namespace)::run_external_phase((anonymous namespace)::LoopParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)
+            |          |          
+            |          |--38.05%--sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+            |          |          |          
+            |          |          |--29.60%--sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+            |          |          |          |          
+            |          |          |           --29.53%--sluice::Result<sluice::async::detail::RequestKey> sluice::async::UringAsyncBackend::submit_request<sluice::async::ReadOp>(sluice::async::ReadOp, sluice::async::detail::OperationKind, sluice::async::detail::RequestOp) (inlined)
+            |          |          |                     |          
+            |          |          |                     |--26.46%--sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+            |          |          |                     |          |          
+            |          |          |                     |          |--21.73%--sluice::async::UringAsyncBackend::submit_transport_locked() (inlined)
+            |          |          |                     |          |          |          
+            |          |          |                     |          |           --21.73%--sluice::async::UringAsyncBackend::submit_transport_locked() (inlined)
+            |          |          |                     |          |                     |          
+            |          |          |                     |          |                     |--20.78%--__io_uring_submit
+            |          |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |--15.30%--entry_SYSCALL_64_after_hwframe
+            |          |          |                     |          |                     |          |          |          
+            |          |          |                     |          |                     |          |           --15.23%--do_syscall_64
+            |          |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                     |--10.71%--__do_sys_io_uring_enter
+            |          |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |--9.58%--io_submit_sqes
+            |          |          |                     |          |                     |          |                     |          |          |          
+            |          |          |                     |          |                     |          |                     |          |           --9.41%--io_submit_sqe
+            |          |          |                     |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |--5.48%--io_wq_enqueue
+            |          |          |                     |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |--4.54%--io_acct_activate_free_worker
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |--4.18%--try_to_wake_up
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |--1.97%--ttwu_do_activate
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |--1.76%--enqueue_task
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |--1.33%--enqueue_task_fair
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |--0.26%--update_curr
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |           --0.10%--update_se
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |--0.23%--enqueue_entity
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |           --0.14%--update_load_avg
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |                      --0.09%--update_cfs_rq_load_avg
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |                                |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |                                 --0.09%--__update_load_avg_cfs_rq
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |--0.16%--reweight_entity
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |--0.10%--update_cfs_rq_load_avg
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |           --0.10%--__update_load_avg_cfs_rq
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |--0.08%--place_entity
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |           --0.06%--calc_concur_shares
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |--0.27%--psi_task_change
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |           --0.24%--psi_group_change
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |           --0.08%--smp_call_function_single_async
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |           --0.19%--wakeup_preempt
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |                     |--0.11%--wakeup_preempt_fair
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |                      --0.05%--__resched_curr
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |--0.53%--select_task_rq
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |--0.33%--select_idle_sibling
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |--0.21%--select_idle_cpu
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |           --0.12%--select_idle_core
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |           --0.05%--choose_idle_cpu
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |           --0.14%--select_task_rq_fair
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |                      --0.08%--wake_affine
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |                                |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |                                 --0.05%--task_h_load
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |--0.41%--___task_rq_lock
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |           --0.39%--raw_spin_rq_lock_nested
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |                      --0.38%--native_queued_spin_lock_slowpath
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |--0.21%--raw_spin_rq_lock_nested
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |           --0.18%--native_queued_spin_lock_slowpath
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |--0.19%--__raw_spin_lock_irqsave
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |--0.14%--ttwu_queue_wakelist
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |--0.13%--_raw_spin_unlock_irqrestore
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |           --0.07%--update_rq_clock_task
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |           --0.17%--io_worker_release
+            |          |          |                     |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |--0.44%--_raw_spin_lock
+            |          |          |                     |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |           --0.06%--native_queued_spin_lock_slowpath
+            |          |          |                     |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |--1.86%--io_prep_rw
+            |          |          |                     |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |--1.44%--__io_prep_rw
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |           --1.13%--io_rw_alloc_async
+            |          |          |                     |          |                     |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |                      --1.06%--io_cache_alloc_new
+            |          |          |                     |          |                     |          |                     |          |                     |          |                                |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |                                 --0.95%--__kmalloc_noprof
+            |          |          |                     |          |                     |          |                     |          |                     |          |                                           |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |                                           |--0.24%--memset_orig
+            |          |          |                     |          |                     |          |                     |          |                     |          |                                           |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |                                            --0.13%--asm_sysvec_reschedule_ipi
+            |          |          |                     |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |           --0.15%--__io_import_rw_buffer
+            |          |          |                     |          |                     |          |                     |          |                     |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |                      --0.06%--import_ubuf
+            |          |          |                     |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |--0.99%--io_issue_sqe
+            |          |          |                     |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |--0.66%--__io_issue_sqe
+            |          |          |                     |          |                     |          |                     |          |                     |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |           --0.63%--io_read
+            |          |          |                     |          |                     |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |                      --0.52%--__io_read
+            |          |          |                     |          |                     |          |                     |          |                     |          |                                |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |                                |--0.29%--io_rw_init_file
+            |          |          |                     |          |                     |          |                     |          |                     |          |                                |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |                                |           --0.14%--io_file_get_flags
+            |          |          |                     |          |                     |          |                     |          |                     |          |                                |          
+            |          |          |                     |          |                     |          |                     |          |                     |          |                                 --0.10%--io_file_supports_nowait
+            |          |          |                     |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |           --0.28%--io_file_get_normal
+            |          |          |                     |          |                     |          |                     |          |                     |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |                      --0.21%--fget
+            |          |          |                     |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |--0.82%--io_queue_iowq
+            |          |          |                     |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |           --0.72%--io_prep_async_link
+            |          |          |                     |          |                     |          |                     |          |                     |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |                      --0.69%--io_prep_async_work
+            |          |          |                     |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                     |          |                     |--0.14%--io_queue_async
+            |          |          |                     |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |                     |           --0.07%--io_arm_poll_handler
+            |          |          |                     |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                     |          |                      --0.05%--io_init_req
+            |          |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |--0.43%--io_uring_ctx_get_file
+            |          |          |                     |          |                     |          |                     |          |          |          
+            |          |          |                     |          |                     |          |                     |          |           --0.40%--fget
+            |          |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |--0.18%--mutex_lock
+            |          |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |--0.18%--mutex_unlock
+            |          |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |           --0.16%--fput
+            |          |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                     |--3.83%--exit_to_user_mode_loop
+            |          |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |--3.30%--arch_do_signal_or_restart
+            |          |          |                     |          |                     |          |                     |          |          |          
+            |          |          |                     |          |                     |          |                     |          |           --3.26%--get_signal
+            |          |          |                     |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                     |          |                      --2.99%--task_work_run
+            |          |          |                     |          |                     |          |                     |          |                                |          
+            |          |          |                     |          |                     |          |                     |          |                                |--2.60%--tctx_task_work
+            |          |          |                     |          |                     |          |                     |          |                                |          |          
+            |          |          |                     |          |                     |          |                     |          |                                |           --2.54%--tctx_task_work_run
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          
+            |          |          |                     |          |                     |          |                     |          |                                |                     |--1.89%--ctx_flush_and_put.isra.0
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |--1.76%--__io_submit_flush_completions
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |--0.64%--io_eventfd_signal
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |          |--0.11%--native_queued_spin_lock_slowpath
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |          |--0.10%--_raw_spin_lock
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |          |--0.08%--eventfd_signal_mask
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |          |           --0.05%--__raw_spin_lock_irqsave
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |           --0.08%--io_eventfd_put
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |--0.50%--io_free_batch_list
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |           --0.27%--fput
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |--0.26%--_raw_spin_lock
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          |          
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |           --0.11%--__io_commit_cqring_flush
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          |          
+            |          |          |                     |          |                     |          |                     |          |                                |                     |           --0.10%--mutex_unlock
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          
+            |          |          |                     |          |                     |          |                     |          |                                |                     |--0.07%--mutex_lock
+            |          |          |                     |          |                     |          |                     |          |                                |                     |          
+            |          |          |                     |          |                     |          |                     |          |                                |                      --0.06%--asm_sysvec_reschedule_ipi
+            |          |          |                     |          |                     |          |                     |          |                                |          
+            |          |          |                     |          |                     |          |                     |          |                                 --0.06%--_raw_spin_lock_irq
+            |          |          |                     |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |                     |           --0.46%--schedule
+            |          |          |                     |          |                     |          |                     |                     |          
+            |          |          |                     |          |                     |          |                     |                      --0.46%--__schedule
+            |          |          |                     |          |                     |          |                     |                                |          
+            |          |          |                     |          |                     |          |                     |                                |--0.16%--__pick_next_task
+            |          |          |                     |          |                     |          |                     |                                |          |          
+            |          |          |                     |          |                     |          |                     |                                |          |--0.07%--set_next_task_fair
+            |          |          |                     |          |                     |          |                     |                                |          |          
+            |          |          |                     |          |                     |          |                     |                                |           --0.05%--pick_task_fair
+            |          |          |                     |          |                     |          |                     |                                |          
+            |          |          |                     |          |                     |          |                     |                                |--0.11%--finish_task_switch.isra.0
+            |          |          |                     |          |                     |          |                     |                                |          |          
+            |          |          |                     |          |                     |          |                     |                                |           --0.09%--__perf_event_task_sched_in
+            |          |          |                     |          |                     |          |                     |                                |                     |          
+            |          |          |                     |          |                     |          |                     |                                |                      --0.05%--perf_ctx_disable
+            |          |          |                     |          |                     |          |                     |                                |          
+            |          |          |                     |          |                     |          |                     |                                 --0.08%--prepare_task_switch
+            |          |          |                     |          |                     |          |                     |                                           |          
+            |          |          |                     |          |                     |          |                     |                                            --0.06%--__perf_event_task_sched_out
+            |          |          |                     |          |                     |          |                     |                                                      |          
+            |          |          |                     |          |                     |          |                     |                                                       --0.06%--perf_event_context_sched_out
+            |          |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                     |--0.21%--asm_sysvec_reschedule_ipi
+            |          |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                     |--0.05%--prandom_u32_state
+            |          |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                      --0.05%--arch_exit_to_user_mode_prepare.isra.0
+            |          |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |--2.93%--entry_SYSRETQ_unsafe_stack
+            |          |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |--0.97%--syscall_return_via_sysret
+            |          |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |--0.58%--entry_SYSCALL_64
+            |          |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |          |--0.40%--asm_sysvec_reschedule_ipi
+            |          |          |                     |          |                     |          |          |          
+            |          |          |                     |          |                     |          |           --0.27%--irqentry_exit
+            |          |          |                     |          |                     |          |                     |          
+            |          |          |                     |          |                     |          |                      --0.26%--arch_do_signal_or_restart
+            |          |          |                     |          |                     |          |                                |          
+            |          |          |                     |          |                     |          |                                 --0.25%--get_signal
+            |          |          |                     |          |                     |          |                                           |          
+            |          |          |                     |          |                     |          |                                            --0.22%--task_work_run
+            |          |          |                     |          |                     |          |                                                      |          
+            |          |          |                     |          |                     |          |                                                       --0.21%--tctx_task_work
+            |          |          |                     |          |                     |          |                                                                 |          
+            |          |          |                     |          |                     |          |                                                                  --0.20%--tctx_task_work_run
+            |          |          |                     |          |                     |          |                                                                            |          
+            |          |          |                     |          |                     |          |                                                                             --0.13%--ctx_flush_and_put.isra.0
+            |          |          |                     |          |                     |          |                                                                                       |          
+            |          |          |                     |          |                     |          |                                                                                        --0.13%--__io_submit_flush_completions
+            |          |          |                     |          |                     |          |                                                                                                  |          
+            |          |          |                     |          |                     |          |                                                                                                   --0.05%--io_eventfd_signal
+            |          |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |           --0.14%--__irqentry_text_end
+            |          |          |                     |          |                     |          
+            |          |          |                     |          |                     |--0.32%--sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)
+            |          |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |           --0.18%--sluice::async::UringAsyncBackend::TransportLedger::pop_front() (inlined)
+            |          |          |                     |          |                     |          
+            |          |          |                     |          |                     |--0.11%--io_uring_submit
+            |          |          |                     |          |                     |          |          
+            |          |          |                     |          |                     |           --0.07%--__io_uring_flush_sq
+            |          |          |                     |          |                     |          
+            |          |          |                     |          |                     |--0.10%--sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)
+            |          |          |                     |          |                     |          
+            |          |          |                     |          |                      --0.06%--asm_sysvec_reschedule_ipi
+            |          |          |                     |          |                                |          
+            |          |          |                     |          |                                 --0.06%--irqentry_exit
+            |          |          |                     |          |                                           arch_do_signal_or_restart
+            |          |          |                     |          |                                           get_signal
+            |          |          |                     |          |          
+            |          |          |                     |          |--2.38%--sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)
+            |          |          |                     |          |          |          
+            |          |          |                     |          |          |--0.51%--std::unique_ptr<sluice::async::UringRingState, std::default_delete<sluice::async::UringRingState> >::operator->() const (inlined)
+            |          |          |                     |          |          |          std::unique_ptr<sluice::async::UringRingState, std::default_delete<sluice::async::UringRingState> >::get() const (inlined)
+            |          |          |                     |          |          |          std::__uniq_ptr_impl<sluice::async::UringRingState, std::default_delete<sluice::async::UringRingState> >::_M_ptr() const (inlined)
+            |          |          |                     |          |          |          |          
+            |          |          |                     |          |          |           --0.10%--asm_sysvec_reschedule_ipi
+            |          |          |                     |          |          |                     |          
+            |          |          |                     |          |          |                      --0.09%--irqentry_exit
+            |          |          |                     |          |          |                                arch_do_signal_or_restart
+            |          |          |                     |          |          |                                get_signal
+            |          |          |                     |          |          |                                |          
+            |          |          |                     |          |          |                                 --0.08%--task_work_run
+            |          |          |                     |          |          |                                           tctx_task_work
+            |          |          |                     |          |          |                                           tctx_task_work_run
+            |          |          |                     |          |          |                                           |          
+            |          |          |                     |          |          |                                            --0.06%--ctx_flush_and_put.isra.0
+            |          |          |                     |          |          |          
+            |          |          |                     |          |          |--0.49%--sluice::async::UringAsyncBackend::TransportLedger::append(sluice::async::UringAsyncBackend::TransportLedger::Kind, unsigned int, unsigned long, sluice::async::detail::RequestReservation) (inlined)
+            |          |          |                     |          |          |          |          
+            |          |          |                     |          |          |           --0.12%--asm_sysvec_reschedule_ipi
+            |          |          |                     |          |          |                     |          
+            |          |          |                     |          |          |                      --0.12%--irqentry_exit
+            |          |          |                     |          |          |                                arch_do_signal_or_restart
+            |          |          |                     |          |          |                                get_signal
+            |          |          |                     |          |          |                                |          
+            |          |          |                     |          |          |                                 --0.11%--task_work_run
+            |          |          |                     |          |          |                                           tctx_task_work
+            |          |          |                     |          |          |                                           tctx_task_work_run
+            |          |          |                     |          |          |                                           |          
+            |          |          |                     |          |          |                                            --0.06%--ctx_flush_and_put.isra.0
+            |          |          |                     |          |          |                                                      __io_submit_flush_completions
+            |          |          |                     |          |          |          
+            |          |          |                     |          |          |--0.47%--sluice::async::detail::RequestCore::claim_execution(sluice::async::detail::RequestKey)
+            |          |          |                     |          |          |          |          
+            |          |          |                     |          |          |          |--0.23%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          |                     |          |          |          |          std::mutex::unlock() (inlined)
+            |          |          |                     |          |          |          |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |                     |          |          |          |          |          
+            |          |          |                     |          |          |          |           --0.21%--__GI___pthread_mutex_unlock_usercnt
+            |          |          |                     |          |          |          |                     |          
+            |          |          |                     |          |          |          |                      --0.05%--asm_sysvec_reschedule_ipi
+            |          |          |                     |          |          |          |                                |          
+            |          |          |                     |          |          |          |                                 --0.05%--irqentry_exit
+            |          |          |                     |          |          |          |                                           arch_do_signal_or_restart
+            |          |          |                     |          |          |          |                                           get_signal
+            |          |          |                     |          |          |          |          
+            |          |          |                     |          |          |           --0.19%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |          |                     |          |          |                     std::mutex::lock() (inlined)
+            |          |          |                     |          |          |                     __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          |                     |          |          |                     |          
+            |          |          |                     |          |          |                      --0.18%--pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          |                     |          |          |          
+            |          |          |                     |          |          |--0.33%--io_uring_get_sqe (inlined)
+            |          |          |                     |          |          |          _io_uring_get_sqe (inlined)
+            |          |          |                     |          |          |          |          
+            |          |          |                     |          |          |          |--0.09%--asm_sysvec_reschedule_ipi
+            |          |          |                     |          |          |          |          |          
+            |          |          |                     |          |          |          |           --0.08%--irqentry_exit
+            |          |          |                     |          |          |          |                     arch_do_signal_or_restart
+            |          |          |                     |          |          |          |                     get_signal
+            |          |          |                     |          |          |          |                     task_work_run
+            |          |          |                     |          |          |          |                     tctx_task_work
+            |          |          |                     |          |          |          |                     tctx_task_work_run
+            |          |          |                     |          |          |          |          
+            |          |          |                     |          |          |           --0.06%--__irqentry_text_end
+            |          |          |                     |          |          |          
+            |          |          |                     |          |          |--0.09%--asm_sysvec_reschedule_ipi
+            |          |          |                     |          |          |          |          
+            |          |          |                     |          |          |           --0.08%--irqentry_exit
+            |          |          |                     |          |          |                     arch_do_signal_or_restart
+            |          |          |                     |          |          |                     |          
+            |          |          |                     |          |          |                      --0.08%--get_signal
+            |          |          |                     |          |          |                                |          
+            |          |          |                     |          |          |                                 --0.06%--task_work_run
+            |          |          |                     |          |          |                                           |          
+            |          |          |                     |          |          |                                            --0.05%--tctx_task_work
+            |          |          |                     |          |          |                                                      tctx_task_work_run
+            |          |          |                     |          |          |          
+            |          |          |                     |          |           --0.05%--__irqentry_text_end
+            |          |          |                     |          |          
+            |          |          |                     |          |--1.77%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          |                     |          |          std::mutex::unlock() (inlined)
+            |          |          |                     |          |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |                     |          |          |          
+            |          |          |                     |          |          |--1.65%--__GI___pthread_mutex_unlock_usercnt
+            |          |          |                     |          |          |          |          
+            |          |          |                     |          |          |           --1.42%--__GI___lll_lock_wake
+            |          |          |                     |          |          |                     |          
+            |          |          |                     |          |          |                     |--1.15%--entry_SYSCALL_64_after_hwframe
+            |          |          |                     |          |          |                     |          |          
+            |          |          |                     |          |          |                     |           --1.14%--do_syscall_64
+            |          |          |                     |          |          |                     |                     |          
+            |          |          |                     |          |          |                     |                      --1.11%--__x64_sys_futex
+            |          |          |                     |          |          |                     |                                do_futex
+            |          |          |                     |          |          |                     |                                |          
+            |          |          |                     |          |          |                     |                                 --1.10%--futex_wake
+            |          |          |                     |          |          |                     |                                           |          
+            |          |          |                     |          |          |                     |                                            --0.95%--wake_up_q
+            |          |          |                     |          |          |                     |                                                      |          
+            |          |          |                     |          |          |                     |                                                       --0.95%--try_to_wake_up
+            |          |          |                     |          |          |                     |                                                                 |          
+            |          |          |                     |          |          |                     |                                                                 |--0.43%--___task_rq_lock
+            |          |          |                     |          |          |                     |                                                                 |          |          
+            |          |          |                     |          |          |                     |                                                                 |           --0.39%--raw_spin_rq_lock_nested
+            |          |          |                     |          |          |                     |                                                                 |                     |          
+            |          |          |                     |          |          |                     |                                                                 |                      --0.36%--native_queued_spin_lock_slowpath
+            |          |          |                     |          |          |                     |                                                                 |          
+            |          |          |                     |          |          |                     |                                                                 |--0.22%--enqueue_task
+            |          |          |                     |          |          |                     |                                                                 |          |          
+            |          |          |                     |          |          |                     |                                                                 |          |--0.08%--psi_task_change
+            |          |          |                     |          |          |                     |                                                                 |          |          |          
+            |          |          |                     |          |          |                     |                                                                 |          |           --0.08%--psi_group_change
+            |          |          |                     |          |          |                     |                                                                 |          |          
+            |          |          |                     |          |          |                     |                                                                 |           --0.06%--enqueue_task_fair
+            |          |          |                     |          |          |                     |                                                                 |          
+            |          |          |                     |          |          |                     |                                                                 |--0.11%--ttwu_do_activate
+            |          |          |                     |          |          |                     |                                                                 |          |          
+            |          |          |                     |          |          |                     |                                                                 |           --0.10%--enqueue_task
+            |          |          |                     |          |          |                     |                                                                 |                     |          
+            |          |          |                     |          |          |                     |                                                                 |                      --0.08%--enqueue_task_fair
+            |          |          |                     |          |          |                     |                                                                 |          
+            |          |          |                     |          |          |                     |                                                                  --0.06%--wakeup_preempt
+            |          |          |                     |          |          |                     |          
+            |          |          |                     |          |          |                     |--0.15%--entry_SYSRETQ_unsafe_stack
+            |          |          |                     |          |          |                     |          
+            |          |          |                     |          |          |                      --0.06%--syscall_return_via_sysret
+            |          |          |                     |          |          |          
+            |          |          |                     |          |           --0.11%--__io_uring_submit
+            |          |          |                     |          |          
+            |          |          |                     |          |--0.27%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |          |                     |          |          std::mutex::lock() (inlined)
+            |          |          |                     |          |          __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          |                     |          |          |          
+            |          |          |                     |          |           --0.24%--pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          |                     |          |                     |          
+            |          |          |                     |          |                      --0.05%--asm_sysvec_reschedule_ipi
+            |          |          |                     |          |          
+            |          |          |                     |           --0.20%--__io_uring_submit
+            |          |          |                     |                     |          
+            |          |          |                     |                     |--0.12%--asm_sysvec_reschedule_ipi
+            |          |          |                     |                     |          
+            |          |          |                     |                      --0.07%--error_entry
+            |          |          |                     |          
+            |          |          |                     |--0.75%--sluice::async::detail::RequestCore::reserve()
+            |          |          |                     |          |          
+            |          |          |                     |          |--0.42%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          |                     |          |          std::mutex::unlock() (inlined)
+            |          |          |                     |          |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |                     |          |          |          
+            |          |          |                     |          |           --0.38%--__GI___pthread_mutex_unlock_usercnt
+            |          |          |                     |          |                     |          
+            |          |          |                     |          |                      --0.07%--__GI___lll_lock_wake
+            |          |          |                     |          |          
+            |          |          |                     |           --0.25%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |          |                     |                     std::mutex::lock() (inlined)
+            |          |          |                     |                     __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          |                     |                     pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          |                     |          
+            |          |          |                     |--0.72%--sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)
+            |          |          |                     |          |          
+            |          |          |                     |          |--0.46%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          |                     |          |          std::mutex::unlock() (inlined)
+            |          |          |                     |          |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |                     |          |          |          
+            |          |          |                     |          |           --0.45%--__GI___pthread_mutex_unlock_usercnt
+            |          |          |                     |          |                     |          
+            |          |          |                     |          |                      --0.08%--asm_sysvec_reschedule_ipi
+            |          |          |                     |          |                                |          
+            |          |          |                     |          |                                 --0.07%--irqentry_exit
+            |          |          |                     |          |                                           arch_do_signal_or_restart
+            |          |          |                     |          |                                           get_signal
+            |          |          |                     |          |                                           |          
+            |          |          |                     |          |                                            --0.07%--task_work_run
+            |          |          |                     |          |                                                      |          
+            |          |          |                     |          |                                                       --0.06%--tctx_task_work
+            |          |          |                     |          |                                                                 tctx_task_work_run
+            |          |          |                     |          |          
+            |          |          |                     |           --0.19%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |          |                     |                     std::mutex::lock() (inlined)
+            |          |          |                     |                     __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          |                     |                     pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          |                     |          
+            |          |          |                     |--0.62%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |          |                     |          std::mutex::lock() (inlined)
+            |          |          |                     |          |          
+            |          |          |                     |           --0.62%--__gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          |                     |                     |          
+            |          |          |                     |                      --0.61%--pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          |                     |                                |          
+            |          |          |                     |                                |--0.12%--asm_sysvec_reschedule_ipi
+            |          |          |                     |                                |          |          
+            |          |          |                     |                                |           --0.11%--irqentry_exit
+            |          |          |                     |                                |                     arch_do_signal_or_restart
+            |          |          |                     |                                |                     get_signal
+            |          |          |                     |                                |                     |          
+            |          |          |                     |                                |                      --0.10%--task_work_run
+            |          |          |                     |                                |                                tctx_task_work
+            |          |          |                     |                                |                                tctx_task_work_run
+            |          |          |                     |                                |                                |          
+            |          |          |                     |                                |                                 --0.08%--ctx_flush_and_put.isra.0
+            |          |          |                     |                                |                                           |          
+            |          |          |                     |                                |                                            --0.07%--__io_submit_flush_completions
+            |          |          |                     |                                |          
+            |          |          |                     |                                |--0.10%--__GI___lll_lock_wait
+            |          |          |                     |                                |          |          
+            |          |          |                     |                                |           --0.08%--entry_SYSCALL_64_after_hwframe
+            |          |          |                     |                                |                     do_syscall_64
+            |          |          |                     |                                |                     |          
+            |          |          |                     |                                |                      --0.07%--__x64_sys_futex
+            |          |          |                     |                                |                                do_futex
+            |          |          |                     |                                |                                futex_wait
+            |          |          |                     |                                |                                |          
+            |          |          |                     |                                |                                 --0.06%--__futex_wait
+            |          |          |                     |                                |                                           |          
+            |          |          |                     |                                |                                            --0.05%--futex_do_wait
+            |          |          |                     |                                |                                                      schedule
+            |          |          |                     |                                |                                                      __schedule
+            |          |          |                     |                                |          
+            |          |          |                     |                                 --0.05%--__irqentry_text_end
+            |          |          |                     |          
+            |          |          |                     |--0.54%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          |                     |          std::mutex::unlock() (inlined)
+            |          |          |                     |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |                     |          |          
+            |          |          |                     |           --0.52%--__GI___pthread_mutex_unlock_usercnt
+            |          |          |                     |                     |          
+            |          |          |                     |                     |--0.09%--asm_sysvec_reschedule_ipi
+            |          |          |                     |                     |          irqentry_exit
+            |          |          |                     |                     |          arch_do_signal_or_restart
+            |          |          |                     |                     |          get_signal
+            |          |          |                     |                     |          |          
+            |          |          |                     |                     |           --0.08%--task_work_run
+            |          |          |                     |                     |                     |          
+            |          |          |                     |                     |                      --0.07%--tctx_task_work
+            |          |          |                     |                     |                                |          
+            |          |          |                     |                     |                                 --0.07%--tctx_task_work_run
+            |          |          |                     |                     |                                           |          
+            |          |          |                     |                     |                                            --0.06%--ctx_flush_and_put.isra.0
+            |          |          |                     |                     |                                                      |          
+            |          |          |                     |                     |                                                       --0.05%--__io_submit_flush_completions
+            |          |          |                     |                     |          
+            |          |          |                     |                      --0.05%--__irqentry_text_end
+            |          |          |                     |          
+            |          |          |                     |--0.08%--asm_sysvec_reschedule_ipi
+            |          |          |                     |          |          
+            |          |          |                     |           --0.07%--irqentry_exit
+            |          |          |                     |                     arch_do_signal_or_restart
+            |          |          |                     |                     get_signal
+            |          |          |                     |                     |          
+            |          |          |                     |                      --0.06%--task_work_run
+            |          |          |                     |                                |          
+            |          |          |                     |                                 --0.06%--tctx_task_work
+            |          |          |                     |                                           tctx_task_work_run
+            |          |          |                     |          
+            |          |          |                      --0.07%--__irqentry_text_end
+            |          |          |          
+            |          |          |--7.06%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          |          std::mutex::unlock() (inlined)
+            |          |          |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |          |          
+            |          |          |           --7.04%--__GI___pthread_mutex_unlock_usercnt
+            |          |          |                     |          
+            |          |          |                      --6.68%--__GI___lll_lock_wake
+            |          |          |                                |          
+            |          |          |                                |--5.45%--entry_SYSCALL_64_after_hwframe
+            |          |          |                                |          |          
+            |          |          |                                |           --5.44%--do_syscall_64
+            |          |          |                                |                     |          
+            |          |          |                                |                     |--4.92%--__x64_sys_futex
+            |          |          |                                |                     |          |          
+            |          |          |                                |                     |           --4.89%--do_futex
+            |          |          |                                |                     |                     |          
+            |          |          |                                |                     |                      --4.88%--futex_wake
+            |          |          |                                |                     |                                |          
+            |          |          |                                |                     |                                |--4.12%--wake_up_q
+            |          |          |                                |                     |                                |          |          
+            |          |          |                                |                     |                                |           --4.08%--try_to_wake_up
+            |          |          |                                |                     |                                |                     |          
+            |          |          |                                |                     |                                |                     |--1.23%--___task_rq_lock
+            |          |          |                                |                     |                                |                     |          |          
+            |          |          |                                |                     |                                |                     |           --1.19%--raw_spin_rq_lock_nested
+            |          |          |                                |                     |                                |                     |                     |          
+            |          |          |                                |                     |                                |                     |                     |--1.11%--native_queued_spin_lock_slowpath
+            |          |          |                                |                     |                                |                     |                     |          
+            |          |          |                                |                     |                                |                     |                      --0.07%--_raw_spin_lock
+            |          |          |                                |                     |                                |                     |          
+            |          |          |                                |                     |                                |                     |--0.95%--ttwu_do_activate
+            |          |          |                                |                     |                                |                     |          |          
+            |          |          |                                |                     |                                |                     |          |--0.85%--enqueue_task
+            |          |          |                                |                     |                                |                     |          |          |          
+            |          |          |                                |                     |                                |                     |          |          |--0.69%--enqueue_task_fair
+            |          |          |                                |                     |                                |                     |          |          |          |          
+            |          |          |                                |                     |                                |                     |          |          |          |--0.17%--update_curr
+            |          |          |                                |                     |                                |                     |          |          |          |          |          
+            |          |          |                                |                     |                                |                     |          |          |          |           --0.06%--update_se
+            |          |          |                                |                     |                                |                     |          |          |          |          
+            |          |          |                                |                     |                                |                     |          |          |          |--0.10%--enqueue_entity
+            |          |          |                                |                     |                                |                     |          |          |          |          |          
+            |          |          |                                |                     |                                |                     |          |          |          |           --0.06%--update_load_avg
+            |          |          |                                |                     |                                |                     |          |          |          |          
+            |          |          |                                |                     |                                |                     |          |          |          |--0.06%--reweight_entity
+            |          |          |                                |                     |                                |                     |          |          |          |          
+            |          |          |                                |                     |                                |                     |          |          |           --0.05%--calc_concur_shares
+            |          |          |                                |                     |                                |                     |          |          |          
+            |          |          |                                |                     |                                |                     |          |           --0.13%--psi_task_change
+            |          |          |                                |                     |                                |                     |          |                     |          
+            |          |          |                                |                     |                                |                     |          |                      --0.10%--psi_group_change
+            |          |          |                                |                     |                                |                     |          |          
+            |          |          |                                |                     |                                |                     |           --0.10%--wakeup_preempt
+            |          |          |                                |                     |                                |                     |                     |          
+            |          |          |                                |                     |                                |                     |                      --0.05%--wakeup_preempt_fair
+            |          |          |                                |                     |                                |                     |          
+            |          |          |                                |                     |                                |                     |--0.48%--enqueue_task
+            |          |          |                                |                     |                                |                     |          |          
+            |          |          |                                |                     |                                |                     |          |--0.14%--psi_task_change
+            |          |          |                                |                     |                                |                     |          |          |          
+            |          |          |                                |                     |                                |                     |          |           --0.13%--psi_group_change
+            |          |          |                                |                     |                                |                     |          |          
+            |          |          |                                |                     |                                |                     |          |--0.14%--requeue_delayed_entity
+            |          |          |                                |                     |                                |                     |          |          
+            |          |          |                                |                     |                                |                     |          |--0.11%--enqueue_task_fair
+            |          |          |                                |                     |                                |                     |          |          |          
+            |          |          |                                |                     |                                |                     |          |           --0.05%--update_curr
+            |          |          |                                |                     |                                |                     |          |          
+            |          |          |                                |                     |                                |                     |           --0.05%--clear_delayed.part.0
+            |          |          |                                |                     |                                |                     |          
+            |          |          |                                |                     |                                |                     |--0.26%--select_task_rq
+            |          |          |                                |                     |                                |                     |          |          
+            |          |          |                                |                     |                                |                     |          |--0.13%--select_task_rq_fair
+            |          |          |                                |                     |                                |                     |          |          |          
+            |          |          |                                |                     |                                |                     |          |           --0.09%--wake_affine
+            |          |          |                                |                     |                                |                     |          |          
+            |          |          |                                |                     |                                |                     |           --0.11%--select_idle_sibling
+            |          |          |                                |                     |                                |                     |                     |          
+            |          |          |                                |                     |                                |                     |                      --0.06%--select_idle_cpu
+            |          |          |                                |                     |                                |                     |          
+            |          |          |                                |                     |                                |                     |--0.22%--raw_spin_rq_lock_nested
+            |          |          |                                |                     |                                |                     |          |          
+            |          |          |                                |                     |                                |                     |          |--0.16%--native_queued_spin_lock_slowpath
+            |          |          |                                |                     |                                |                     |          |          
+            |          |          |                                |                     |                                |                     |           --0.06%--_raw_spin_lock
+            |          |          |                                |                     |                                |                     |          
+            |          |          |                                |                     |                                |                     |--0.11%--_raw_spin_unlock_irqrestore
+            |          |          |                                |                     |                                |                     |          |          
+            |          |          |                                |                     |                                |                     |           --0.06%--asm_sysvec_reschedule_ipi
+            |          |          |                                |                     |                                |                     |          
+            |          |          |                                |                     |                                |                     |--0.11%--wakeup_preempt
+            |          |          |                                |                     |                                |                     |          |          
+            |          |          |                                |                     |                                |                     |           --0.09%--wakeup_preempt_fair
+            |          |          |                                |                     |                                |                     |          
+            |          |          |                                |                     |                                |                     |--0.11%--ttwu_queue_wakelist
+            |          |          |                                |                     |                                |                     |          
+            |          |          |                                |                     |                                |                      --0.08%--update_rq_clock_task
+            |          |          |                                |                     |                                |          
+            |          |          |                                |                     |                                |--0.32%--futex_wake_mark
+            |          |          |                                |                     |                                |          |          
+            |          |          |                                |                     |                                |           --0.17%--__futex_unqueue
+            |          |          |                                |                     |                                |          
+            |          |          |                                |                     |                                |--0.10%--_raw_spin_lock
+            |          |          |                                |                     |                                |          
+            |          |          |                                |                     |                                 --0.09%--futex_hash
+            |          |          |                                |                     |                                           |          
+            |          |          |                                |                     |                                            --0.07%--__futex_hash
+            |          |          |                                |                     |          
+            |          |          |                                |                      --0.47%--exit_to_user_mode_loop
+            |          |          |                                |                                |          
+            |          |          |                                |                                |--0.35%--arch_do_signal_or_restart
+            |          |          |                                |                                |          get_signal
+            |          |          |                                |                                |          |          
+            |          |          |                                |                                |           --0.32%--task_work_run
+            |          |          |                                |                                |                     |          
+            |          |          |                                |                                |                      --0.26%--tctx_task_work
+            |          |          |                                |                                |                                |          
+            |          |          |                                |                                |                                 --0.25%--tctx_task_work_run
+            |          |          |                                |                                |                                           |          
+            |          |          |                                |                                |                                            --0.19%--ctx_flush_and_put.isra.0
+            |          |          |                                |                                |                                                      |          
+            |          |          |                                |                                |                                                       --0.17%--__io_submit_flush_completions
+            |          |          |                                |                                |          
+            |          |          |                                |                                 --0.10%--schedule
+            |          |          |                                |                                           __schedule
+            |          |          |                                |          
+            |          |          |                                |--0.59%--entry_SYSRETQ_unsafe_stack
+            |          |          |                                |          
+            |          |          |                                |--0.23%--asm_sysvec_reschedule_ipi
+            |          |          |                                |          |          
+            |          |          |                                |           --0.16%--irqentry_exit
+            |          |          |                                |                     |          
+            |          |          |                                |                      --0.15%--arch_do_signal_or_restart
+            |          |          |                                |                                get_signal
+            |          |          |                                |                                |          
+            |          |          |                                |                                 --0.12%--task_work_run
+            |          |          |                                |                                           |          
+            |          |          |                                |                                            --0.11%--tctx_task_work
+            |          |          |                                |                                                      tctx_task_work_run
+            |          |          |                                |                                                      |          
+            |          |          |                                |                                                       --0.07%--ctx_flush_and_put.isra.0
+            |          |          |                                |                                                                 __io_submit_flush_completions
+            |          |          |                                |          
+            |          |          |                                |--0.21%--syscall_return_via_sysret
+            |          |          |                                |          
+            |          |          |                                 --0.11%--__irqentry_text_end
+            |          |          |          
+            |          |          |--1.05%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |          |          std::mutex::lock() (inlined)
+            |          |          |          __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          |          |          
+            |          |          |           --1.02%--pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          |                     |          
+            |          |          |                      --0.69%--__GI___lll_lock_wait
+            |          |          |                                |          
+            |          |          |                                |--0.57%--entry_SYSCALL_64_after_hwframe
+            |          |          |                                |          |          
+            |          |          |                                |           --0.56%--do_syscall_64
+            |          |          |                                |                     |          
+            |          |          |                                |                      --0.53%--__x64_sys_futex
+            |          |          |                                |                                |          
+            |          |          |                                |                                 --0.53%--do_futex
+            |          |          |                                |                                           |          
+            |          |          |                                |                                            --0.52%--futex_wait
+            |          |          |                                |                                                      |          
+            |          |          |                                |                                                       --0.51%--__futex_wait
+            |          |          |                                |                                                                 |          
+            |          |          |                                |                                                                  --0.45%--futex_do_wait
+            |          |          |                                |                                                                            |          
+            |          |          |                                |                                                                             --0.44%--schedule
+            |          |          |                                |                                                                                       __schedule
+            |          |          |                                |                                                                                       |          
+            |          |          |                                |                                                                                       |--0.16%--try_to_block_task.constprop.0.isra.0
+            |          |          |                                |                                                                                       |          |          
+            |          |          |                                |                                                                                       |           --0.13%--__dequeue_task
+            |          |          |                                |                                                                                       |                     |          
+            |          |          |                                |                                                                                       |                      --0.07%--dequeue_hierarchy
+            |          |          |                                |                                                                                       |                                |          
+            |          |          |                                |                                                                                       |                                 --0.05%--dequeue_entity
+            |          |          |                                |                                                                                       |          
+            |          |          |                                |                                                                                       |--0.08%--__pick_next_task
+            |          |          |                                |                                                                                       |          
+            |          |          |                                |                                                                                        --0.06%--prepare_task_switch
+            |          |          |                                |          
+            |          |          |                                 --0.06%--entry_SYSRETQ_unsafe_stack
+            |          |          |          
+            |          |           --0.06%--sluice::Result<sluice::async::Request<unsigned long> >::Result(sluice::async::Request<unsigned long>&&) (inlined)
+            |          |                     sluice::detail::result_storage<sluice::async::Request<unsigned long> >::result_storage(sluice::detail::success_tag, sluice::async::Request<unsigned long>&&) (inlined)
+            |          |          
+            |          |--2.73%--wait_for<long int, std::ratio<1>, (anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::<lambda()> > (inlined)
+            |          |          |          
+            |          |          |--2.68%--wait_until<std::chrono::_V2::steady_clock, std::chrono::duration<long int, std::ratio<1, 1000000000> >, (anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::<lambda()> > (inlined)
+            |          |          |          |          
+            |          |          |           --2.67%--std::cv_status std::condition_variable::wait_until<std::chrono::duration<long, std::ratio<1l, 1000000000l> > >(std::unique_lock<std::mutex>&, std::chrono::time_point<std::chrono::_V2::steady_clock, std::chrono::duration<long, std::ratio<1l, 1000000000l> > > const&) (inlined)
+            |          |          |                     std::cv_status std::condition_variable::__wait_until_impl<std::chrono::duration<long, std::ratio<1l, 1000000000l> > >(std::unique_lock<std::mutex>&, std::chrono::time_point<std::chrono::_V2::steady_clock, std::chrono::duration<long, std::ratio<1l, 1000000000l> > > const&) (inlined)
+            |          |          |                     |          
+            |          |          |                      --2.66%--std::__condvar::wait_until(std::mutex&, int, timespec&) (inlined)
+            |          |          |                                |          
+            |          |          |                                 --2.65%--pthread_cond_clockwait@@GLIBC_2.34
+            |          |          |                                           |          
+            |          |          |                                            --2.46%--__GI___futex_abstimed_wait_cancelable64
+            |          |          |                                                      |          
+            |          |          |                                                       --2.44%--__internal_syscall_cancel
+            |          |          |                                                                 |          
+            |          |          |                                                                 |--2.24%--__syscall_cancel_arch_end
+            |          |          |                                                                 |          |          
+            |          |          |                                                                 |          |--1.96%--entry_SYSCALL_64_after_hwframe
+            |          |          |                                                                 |          |          |          
+            |          |          |                                                                 |          |           --1.95%--do_syscall_64
+            |          |          |                                                                 |          |                     |          
+            |          |          |                                                                 |          |                     |--1.08%--__x64_sys_futex
+            |          |          |                                                                 |          |                     |          |          
+            |          |          |                                                                 |          |                     |           --0.99%--do_futex
+            |          |          |                                                                 |          |                     |                     futex_wait
+            |          |          |                                                                 |          |                     |                     |          
+            |          |          |                                                                 |          |                     |                     |--0.89%--__futex_wait
+            |          |          |                                                                 |          |                     |                     |          |          
+            |          |          |                                                                 |          |                     |                     |          |--0.75%--futex_do_wait
+            |          |          |                                                                 |          |                     |                     |          |          |          
+            |          |          |                                                                 |          |                     |                     |          |          |--0.69%--schedule
+            |          |          |                                                                 |          |                     |                     |          |          |          |          
+            |          |          |                                                                 |          |                     |                     |          |          |           --0.67%--__schedule
+            |          |          |                                                                 |          |                     |                     |          |          |                     |          
+            |          |          |                                                                 |          |                     |                     |          |          |                     |--0.22%--try_to_block_task.constprop.0.isra.0
+            |          |          |                                                                 |          |                     |                     |          |          |                     |          |          
+            |          |          |                                                                 |          |                     |                     |          |          |                     |           --0.19%--__dequeue_task
+            |          |          |                                                                 |          |                     |                     |          |          |                     |                     |          
+            |          |          |                                                                 |          |                     |                     |          |          |                     |                      --0.10%--dequeue_hierarchy
+            |          |          |                                                                 |          |                     |                     |          |          |                     |                                |          
+            |          |          |                                                                 |          |                     |                     |          |          |                     |                                 --0.08%--dequeue_entity
+            |          |          |                                                                 |          |                     |                     |          |          |                     |                                           |          
+            |          |          |                                                                 |          |                     |                     |          |          |                     |                                            --0.05%--update_load_avg
+            |          |          |                                                                 |          |                     |                     |          |          |                     |          
+            |          |          |                                                                 |          |                     |                     |          |          |                     |--0.16%--__pick_next_task
+            |          |          |                                                                 |          |                     |                     |          |          |                     |          |          
+            |          |          |                                                                 |          |                     |                     |          |          |                     |           --0.07%--pick_task_fair
+            |          |          |                                                                 |          |                     |                     |          |          |                     |          
+            |          |          |                                                                 |          |                     |                     |          |          |                      --0.08%--prepare_task_switch
+            |          |          |                                                                 |          |                     |                     |          |          |                                |          
+            |          |          |                                                                 |          |                     |                     |          |          |                                 --0.07%--__perf_event_task_sched_out
+            |          |          |                                                                 |          |                     |                     |          |          |          
+            |          |          |                                                                 |          |                     |                     |          |           --0.05%--hrtimer_sleeper_start_expires
+            |          |          |                                                                 |          |                     |                     |          |                     hrtimer_start_range_ns_user
+            |          |          |                                                                 |          |                     |                     |          |          
+            |          |          |                                                                 |          |                     |                     |           --0.06%--futex_wait_setup
+            |          |          |                                                                 |          |                     |                     |          
+            |          |          |                                                                 |          |                     |                      --0.05%--hrtimer_cancel
+            |          |          |                                                                 |          |                     |          
+            |          |          |                                                                 |          |                     |--0.50%--futex_wait_restart
+            |          |          |                                                                 |          |                     |          |          
+            |          |          |                                                                 |          |                     |           --0.49%--futex_wait
+            |          |          |                                                                 |          |                     |                     |          
+            |          |          |                                                                 |          |                     |                      --0.45%--__futex_wait
+            |          |          |                                                                 |          |                     |                                |          
+            |          |          |                                                                 |          |                     |                                 --0.40%--futex_do_wait
+            |          |          |                                                                 |          |                     |                                           |          
+            |          |          |                                                                 |          |                     |                                            --0.38%--schedule
+            |          |          |                                                                 |          |                     |                                                      |          
+            |          |          |                                                                 |          |                     |                                                       --0.37%--__schedule
+            |          |          |                                                                 |          |                     |                                                                 |          
+            |          |          |                                                                 |          |                     |                                                                 |--0.14%--try_to_block_task.constprop.0.isra.0
+            |          |          |                                                                 |          |                     |                                                                 |          |          
+            |          |          |                                                                 |          |                     |                                                                 |           --0.12%--__dequeue_task
+            |          |          |                                                                 |          |                     |                                                                 |                     |          
+            |          |          |                                                                 |          |                     |                                                                 |                      --0.08%--dequeue_hierarchy
+            |          |          |                                                                 |          |                     |                                                                 |                                |          
+            |          |          |                                                                 |          |                     |                                                                 |                                 --0.07%--dequeue_entity
+            |          |          |                                                                 |          |                     |                                                                 |                                           |          
+            |          |          |                                                                 |          |                     |                                                                 |                                            --0.06%--update_load_avg
+            |          |          |                                                                 |          |                     |                                                                 |          
+            |          |          |                                                                 |          |                     |                                                                  --0.06%--__pick_next_task
+            |          |          |                                                                 |          |                     |          
+            |          |          |                                                                 |          |                      --0.26%--exit_to_user_mode_loop
+            |          |          |                                                                 |          |                                |          
+            |          |          |                                                                 |          |                                 --0.26%--arch_do_signal_or_restart
+            |          |          |                                                                 |          |                                           |          
+            |          |          |                                                                 |          |                                            --0.25%--get_signal
+            |          |          |                                                                 |          |                                                      |          
+            |          |          |                                                                 |          |                                                       --0.23%--task_work_run
+            |          |          |                                                                 |          |                                                                 |          
+            |          |          |                                                                 |          |                                                                  --0.20%--tctx_task_work
+            |          |          |                                                                 |          |                                                                            tctx_task_work_run
+            |          |          |                                                                 |          |                                                                            |          
+            |          |          |                                                                 |          |                                                                             --0.13%--ctx_flush_and_put.isra.0
+            |          |          |                                                                 |          |                                                                                       |          
+            |          |          |                                                                 |          |                                                                                        --0.12%--__io_submit_flush_completions
+            |          |          |                                                                 |          |          
+            |          |          |                                                                 |          |--0.15%--entry_SYSRETQ_unsafe_stack
+            |          |          |                                                                 |          |          
+            |          |          |                                                                 |           --0.08%--syscall_return_via_sysret
+            |          |          |                                                                 |          
+            |          |          |                                                                  --0.16%--__syscall_cancel_arch_start
+            |          |          |                                                                            |          
+            |          |          |                                                                             --0.08%--__irqentry_text_end
+            |          |          |          
+            |          |           --0.05%--std::chrono::_V2::steady_clock::now()
+            |          |          
+            |          |--1.46%--bench::verify_pattern(std::byte const*, unsigned long, unsigned long)
+            |          |          |          
+            |          |           --1.45%--__memcmp_avx2_movbe
+            |          |                     |          
+            |          |                      --0.08%--asm_sysvec_reschedule_ipi
+            |          |                                |          
+            |          |                                 --0.07%--irqentry_exit
+            |          |                                           arch_do_signal_or_restart
+            |          |                                           get_signal
+            |          |                                           |          
+            |          |                                            --0.06%--task_work_run
+            |          |                                                      |          
+            |          |                                                       --0.05%--tctx_task_work
+            |          |          
+            |          |--1.39%--sluice::async::Request<unsigned long>::take_result() (inlined)
+            |          |          |          
+            |          |           --1.36%--sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+            |          |                     |          
+            |          |                      --1.33%--sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) (inlined)
+            |          |                                |          
+            |          |                                |--0.95%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |                                |          std::mutex::unlock() (inlined)
+            |          |                                |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |                                |          |          
+            |          |                                |           --0.93%--__GI___pthread_mutex_unlock_usercnt
+            |          |                                |                     |          
+            |          |                                |                     |--0.11%--__GI___lll_lock_wake
+            |          |                                |                     |          |          
+            |          |                                |                     |           --0.06%--entry_SYSRETQ_unsafe_stack
+            |          |                                |                     |          
+            |          |                                |                      --0.05%--asm_sysvec_reschedule_ipi
+            |          |                                |          
+            |          |                                 --0.22%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |                                           std::mutex::lock() (inlined)
+            |          |                                           __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |                                           pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          
+            |          |--0.64%--sluice::async::Request<unsigned long>::ready() const (inlined)
+            |          |          |          
+            |          |           --0.62%--sluice::async::detail::RequestBridge::ready(sluice::async::detail::RequestCore const*, sluice::async::RequestId const&)
+            |          |                     |          
+            |          |                      --0.59%--sluice::async::detail::RequestCore::lookup(sluice::async::detail::RequestKey) const (inlined)
+            |          |                                |          
+            |          |                                |--0.30%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |                                |          std::mutex::lock() (inlined)
+            |          |                                |          __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |                                |          pthread_mutex_lock@@GLIBC_2.2.5
+            |          |                                |          |          
+            |          |                                |           --0.05%--__GI___lll_lock_wait
+            |          |                                |          
+            |          |                                |--0.15%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |                                |          std::mutex::unlock() (inlined)
+            |          |                                |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |                                |          |          
+            |          |                                |           --0.14%--__GI___pthread_mutex_unlock_usercnt
+            |          |                                |          
+            |          |                                 --0.13%--sluice::async::detail::RequestCore::resolve_public_(sluice::async::detail::RequestKey) const (inlined)
+            |          |                                           |          
+            |          |                                            --0.12%--sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey) const (inlined)
+            |          |          
+            |          |--0.36%--std::unique_lock<std::mutex>::~unique_lock() (inlined)
+            |          |          std::unique_lock<std::mutex>::unlock() (inlined)
+            |          |          std::mutex::unlock() (inlined)
+            |          |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |          
+            |          |          |--0.29%--__GI___pthread_mutex_unlock_usercnt
+            |          |          |          |          
+            |          |          |           --0.28%--__GI___lll_lock_wake
+            |          |          |                     |          
+            |          |          |                     |--0.14%--entry_SYSRETQ_unsafe_stack
+            |          |          |                     |          
+            |          |          |                      --0.08%--entry_SYSCALL_64_after_hwframe
+            |          |          |                                do_syscall_64
+            |          |          |          
+            |          |           --0.06%--pthread_cond_clockwait@@GLIBC_2.34
+            |          |                     __GI___futex_abstimed_wait_cancelable64
+            |          |                     __internal_syscall_cancel
+            |          |                     __syscall_cancel_arch_end
+            |          |                     entry_SYSCALL_64
+            |          |          
+            |          |--0.24%--bench::now_ns() (inlined)
+            |          |          |          
+            |          |           --0.22%--std::chrono::_V2::steady_clock::now()
+            |          |                     |          
+            |          |                      --0.18%--clock_gettime@@GLIBC_2.17
+            |          |                                |          
+            |          |                                 --0.11%--0x7f1532abfa8c
+            |          |          
+            |          |--0.18%--push_back (inlined)
+            |          |          emplace_back<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+            |          |          |          
+            |          |           --0.15%--_M_push_back_aux<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+            |          |                     |          
+            |          |                      --0.13%--_M_allocate_node (inlined)
+            |          |                                allocate (inlined)
+            |          |                                allocate (inlined)
+            |          |                                allocate (inlined)
+            |          |                                |          
+            |          |                                 --0.12%--operator new(unsigned long)
+            |          |                                           |          
+            |          |                                            --0.09%--malloc
+            |          |          
+            |          |--0.17%--__GI___pthread_mutex_unlock_usercnt
+            |          |          sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+            |          |          sluice::Result<sluice::async::detail::RequestKey> sluice::async::UringAsyncBackend::submit_request<sluice::async::ReadOp>(sluice::async::ReadOp, sluice::async::detail::OperationKind, sluice::async::detail::RequestOp) (inlined)
+            |          |          sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+            |          |          std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          std::mutex::unlock() (inlined)
+            |          |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |          
+            |          |           --0.16%--__io_uring_submit
+            |          |                     entry_SYSCALL_64
+            |          |          
+            |          |--0.15%--asm_sysvec_reschedule_ipi
+            |          |          |          
+            |          |           --0.12%--irqentry_exit
+            |          |                     |          
+            |          |                      --0.12%--arch_do_signal_or_restart
+            |          |                                get_signal
+            |          |                                |          
+            |          |                                 --0.10%--task_work_run
+            |          |                                           |          
+            |          |                                            --0.10%--tctx_task_work
+            |          |                                                      |          
+            |          |                                                       --0.09%--tctx_task_work_run
+            |          |                                                                 |          
+            |          |                                                                  --0.06%--ctx_flush_and_put.isra.0
+            |          |                                                                            __io_submit_flush_completions
+            |          |          
+            |          |--0.09%--std::unique_lock<std::mutex>::unique_lock(std::mutex&) (inlined)
+            |          |          std::unique_lock<std::mutex>::lock() (inlined)
+            |          |          std::mutex::lock() (inlined)
+            |          |          __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          |          
+            |          |           --0.09%--pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          
+            |          |--0.07%--pop_front (inlined)
+            |          |          |          
+            |          |           --0.07%--_M_pop_front_aux (inlined)
+            |          |                     _M_deallocate_node (inlined)
+            |          |                     deallocate (inlined)
+            |          |                     deallocate (inlined)
+            |          |                     deallocate (inlined)
+            |          |                     |          
+            |          |                      --0.06%--cfree@GLIBC_2.2.5
+            |          |          
+            |          |--0.05%--(anonymous namespace)::make_context((anonymous namespace)::BackendChoice const&, unsigned long, unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, sluice::AsyncStats*) [clone .constprop.0]
+            |          |          sluice::async::make_uring_context(sluice::async::UringConfig, sluice::AsyncStats*)
+            |          |          std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig&>(sluice::async::UringConfig&) (inlined)
+            |          |          
+            |           --0.05%--thread<void (&)(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&), std::reference_wrapper<sluice::async::AsyncIoContext>, int const&, int const&, std::reference_wrapper<(anonymous namespace)::SharedLoop> > (inlined)
+            |                     std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)())
+            |                     pthread_create@GLIBC_2.2.5
+            |                     create_thread
+            |                     __GI___clone_internal
+            |                     __GI___clone3
+            |                     entry_SYSCALL_64_after_hwframe
+            |                     do_syscall_64
+            |                     __do_sys_clone3
+            |                     kernel_clone
+            |                     copy_process
+            |          
+             --0.91%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       __libc_start_call_main
+                       main
+                       (anonymous namespace)::run_one_repetition(bench::EnvConfig const&, (anonymous namespace)::LoopParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned long, unsigned long, bool)
+                       (anonymous namespace)::run_external_phase((anonymous namespace)::LoopParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)
+                       |          
+                       |--0.13%--push_back (inlined)
+                       |          emplace_back<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+                       |          
+                        --0.08%--size (inlined)
+                                  operator- (inlined)
+
+     2.77%     0.00%  bench_w03_exter  bench_w03_external_loop  [.] wait_for<long int, std::ratio<1>, (anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::<lambda()> > (inlined)
+            |
+            ---wait_for<long int, std::ratio<1>, (anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::<lambda()> > (inlined)
+               |          
+               |--2.71%--wait_until<std::chrono::_V2::steady_clock, std::chrono::duration<long int, std::ratio<1, 1000000000> >, (anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::<lambda()> > (inlined)
+               |          |          
+               |           --2.68%--std::cv_status std::condition_variable::wait_until<std::chrono::duration<long, std::ratio<1l, 1000000000l> > >(std::unique_lock<std::mutex>&, std::chrono::time_point<std::chrono::_V2::steady_clock, std::chrono::duration<long, std::ratio<1l, 1000000000l> > > const&) (inlined)
+               |                     std::cv_status std::condition_variable::__wait_until_impl<std::chrono::duration<long, std::ratio<1l, 1000000000l> > >(std::unique_lock<std::mutex>&, std::chrono::time_point<std::chrono::_V2::steady_clock, std::chrono::duration<long, std::ratio<1l, 1000000000l> > > const&) (inlined)
+               |                     |          
+               |                      --2.66%--std::__condvar::wait_until(std::mutex&, int, timespec&) (inlined)
+               |                                |          
+               |                                 --2.65%--pthread_cond_clockwait@@GLIBC_2.34
+               |                                           |          
+               |                                            --2.46%--__GI___futex_abstimed_wait_cancelable64
+               |                                                      |          
+               |                                                       --2.44%--__internal_syscall_cancel
+               |                                                                 |          
+               |                                                                 |--2.24%--__syscall_cancel_arch_end
+               |                                                                 |          |          
+               |                                                                 |          |--1.96%--entry_SYSCALL_64_after_hwframe
+               |                                                                 |          |          |          
+               |                                                                 |          |           --1.95%--do_syscall_64
+               |                                                                 |          |                     |          
+               |                                                                 |          |                     |--1.08%--__x64_sys_futex
+               |                                                                 |          |                     |          |          
+               |                                                                 |          |                     |           --0.99%--do_futex
+               |                                                                 |          |                     |                     futex_wait
+               |                                                                 |          |                     |                     |          
+               |                                                                 |          |                     |                     |--0.89%--__futex_wait
+               |                                                                 |          |                     |                     |          |          
+               |                                                                 |          |                     |                     |          |--0.75%--futex_do_wait
+               |                                                                 |          |                     |                     |          |          |          
+               |                                                                 |          |                     |                     |          |          |--0.69%--schedule
+               |                                                                 |          |                     |                     |          |          |          |          
+               |                                                                 |          |                     |                     |          |          |           --0.67%--__schedule
+               |                                                                 |          |                     |                     |          |          |                     |          
+               |                                                                 |          |                     |                     |          |          |                     |--0.22%--try_to_block_task.constprop.0.isra.0
+               |                                                                 |          |                     |                     |          |          |                     |          |          
+               |                                                                 |          |                     |                     |          |          |                     |           --0.19%--__dequeue_task
+               |                                                                 |          |                     |                     |          |          |                     |                     |          
+               |                                                                 |          |                     |                     |          |          |                     |                      --0.10%--dequeue_hierarchy
+               |                                                                 |          |                     |                     |          |          |                     |                                |          
+               |                                                                 |          |                     |                     |          |          |                     |                                 --0.08%--dequeue_entity
+               |                                                                 |          |                     |                     |          |          |                     |                                           |          
+               |                                                                 |          |                     |                     |          |          |                     |                                            --0.05%--update_load_avg
+               |                                                                 |          |                     |                     |          |          |                     |          
+               |                                                                 |          |                     |                     |          |          |                     |--0.16%--__pick_next_task
+               |                                                                 |          |                     |                     |          |          |                     |          |          
+               |                                                                 |          |                     |                     |          |          |                     |           --0.07%--pick_task_fair
+               |                                                                 |          |                     |                     |          |          |                     |          
+               |                                                                 |          |                     |                     |          |          |                      --0.08%--prepare_task_switch
+               |                                                                 |          |                     |                     |          |          |                                |          
+               |                                                                 |          |                     |                     |          |          |                                 --0.07%--__perf_event_task_sched_out
+               |                                                                 |          |                     |                     |          |          |          
+               |                                                                 |          |                     |                     |          |           --0.05%--hrtimer_sleeper_start_expires
+               |                                                                 |          |                     |                     |          |                     hrtimer_start_range_ns_user
+               |                                                                 |          |                     |                     |          |          
+               |                                                                 |          |                     |                     |           --0.06%--futex_wait_setup
+               |                                                                 |          |                     |                     |          
+               |                                                                 |          |                     |                      --0.05%--hrtimer_cancel
+               |                                                                 |          |                     |          
+               |                                                                 |          |                     |--0.50%--futex_wait_restart
+               |                                                                 |          |                     |          |          
+               |                                                                 |          |                     |           --0.49%--futex_wait
+               |                                                                 |          |                     |                     |          
+               |                                                                 |          |                     |                      --0.45%--__futex_wait
+               |                                                                 |          |                     |                                |          
+               |                                                                 |          |                     |                                 --0.40%--futex_do_wait
+               |                                                                 |          |                     |                                           |          
+               |                                                                 |          |                     |                                            --0.38%--schedule
+               |                                                                 |          |                     |                                                      |          
+               |                                                                 |          |                     |                                                       --0.37%--__schedule
+               |                                                                 |          |                     |                                                                 |          
+               |                                                                 |          |                     |                                                                 |--0.14%--try_to_block_task.constprop.0.isra.0
+               |                                                                 |          |                     |                                                                 |          |          
+               |                                                                 |          |                     |                                                                 |           --0.12%--__dequeue_task
+               |                                                                 |          |                     |                                                                 |                     |          
+               |                                                                 |          |                     |                                                                 |                      --0.08%--dequeue_hierarchy
+               |                                                                 |          |                     |                                                                 |                                |          
+               |                                                                 |          |                     |                                                                 |                                 --0.07%--dequeue_entity
+               |                                                                 |          |                     |                                                                 |                                           |          
+               |                                                                 |          |                     |                                                                 |                                            --0.06%--update_load_avg
+               |                                                                 |          |                     |                                                                 |          
+               |                                                                 |          |                     |                                                                  --0.06%--__pick_next_task
+               |                                                                 |          |                     |          
+               |                                                                 |          |                      --0.26%--exit_to_user_mode_loop
+               |                                                                 |          |                                |          
+               |                                                                 |          |                                 --0.26%--arch_do_signal_or_restart
+               |                                                                 |          |                                           |          
+               |                                                                 |          |                                            --0.25%--get_signal
+               |                                                                 |          |                                                      |          
+               |                                                                 |          |                                                       --0.23%--task_work_run
+               |                                                                 |          |                                                                 |          
+               |                                                                 |          |                                                                  --0.20%--tctx_task_work
+               |                                                                 |          |                                                                            tctx_task_work_run
+               |                                                                 |          |                                                                            |          
+               |                                                                 |          |                                                                             --0.13%--ctx_flush_and_put.isra.0
+               |                                                                 |          |                                                                                       |          
+               |                                                                 |          |                                                                                        --0.12%--__io_submit_flush_completions
+               |                                                                 |          |          
+               |                                                                 |          |--0.15%--entry_SYSRETQ_unsafe_stack
+               |                                                                 |          |          
+               |                                                                 |           --0.08%--syscall_return_via_sysret
+               |                                                                 |          
+               |                                                                  --0.16%--__syscall_cancel_arch_start
+               |                                                                            |          
+               |                                                                             --0.08%--__irqentry_text_end
+               |          
+                --0.05%--std::chrono::_V2::steady_clock::now()
+
+     2.71%     0.00%  bench_w03_exter  bench_w03_external_loop  [.] wait_until<std::chrono::_V2::steady_clock, std::chrono::duration<long int, std::ratio<1, 1000000000> >, (anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::<lambda()> > (inlined)
+            |
+            ---wait_until<std::chrono::_V2::steady_clock, std::chrono::duration<long int, std::ratio<1, 1000000000> >, (anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::<lambda()> > (inlined)
+               |          
+                --2.68%--std::cv_status std::condition_variable::wait_until<std::chrono::duration<long, std::ratio<1l, 1000000000l> > >(std::unique_lock<std::mutex>&, std::chrono::time_point<std::chrono::_V2::steady_clock, std::chrono::duration<long, std::ratio<1l, 1000000000l> > > const&) (inlined)
+                          std::cv_status std::condition_variable::__wait_until_impl<std::chrono::duration<long, std::ratio<1l, 1000000000l> > >(std::unique_lock<std::mutex>&, std::chrono::time_point<std::chrono::_V2::steady_clock, std::chrono::duration<long, std::ratio<1l, 1000000000l> > > const&) (inlined)
+                          |          
+                           --2.66%--std::__condvar::wait_until(std::mutex&, int, timespec&) (inlined)
+                                     |          
+                                      --2.65%--pthread_cond_clockwait@@GLIBC_2.34
+                                                |          
+                                                 --2.46%--__GI___futex_abstimed_wait_cancelable64
+                                                           |          
+                                                            --2.44%--__internal_syscall_cancel
+                                                                      |          
+                                                                      |--2.24%--__syscall_cancel_arch_end
+                                                                      |          |          
+                                                                      |          |--1.96%--entry_SYSCALL_64_after_hwframe
+                                                                      |          |          |          
+                                                                      |          |           --1.95%--do_syscall_64
+                                                                      |          |                     |          
+                                                                      |          |                     |--1.08%--__x64_sys_futex
+                                                                      |          |                     |          |          
+                                                                      |          |                     |           --0.99%--do_futex
+                                                                      |          |                     |                     futex_wait
+                                                                      |          |                     |                     |          
+                                                                      |          |                     |                     |--0.89%--__futex_wait
+                                                                      |          |                     |                     |          |          
+                                                                      |          |                     |                     |          |--0.75%--futex_do_wait
+                                                                      |          |                     |                     |          |          |          
+                                                                      |          |                     |                     |          |          |--0.69%--schedule
+                                                                      |          |                     |                     |          |          |          |          
+                                                                      |          |                     |                     |          |          |           --0.67%--__schedule
+                                                                      |          |                     |                     |          |          |                     |          
+                                                                      |          |                     |                     |          |          |                     |--0.22%--try_to_block_task.constprop.0.isra.0
+                                                                      |          |                     |                     |          |          |                     |          |          
+                                                                      |          |                     |                     |          |          |                     |           --0.19%--__dequeue_task
+                                                                      |          |                     |                     |          |          |                     |                     |          
+                                                                      |          |                     |                     |          |          |                     |                      --0.10%--dequeue_hierarchy
+                                                                      |          |                     |                     |          |          |                     |                                |          
+                                                                      |          |                     |                     |          |          |                     |                                 --0.08%--dequeue_entity
+                                                                      |          |                     |                     |          |          |                     |                                           |          
+                                                                      |          |                     |                     |          |          |                     |                                            --0.05%--update_load_avg
+                                                                      |          |                     |                     |          |          |                     |          
+                                                                      |          |                     |                     |          |          |                     |--0.16%--__pick_next_task
+                                                                      |          |                     |                     |          |          |                     |          |          
+                                                                      |          |                     |                     |          |          |                     |           --0.07%--pick_task_fair
+                                                                      |          |                     |                     |          |          |                     |          
+                                                                      |          |                     |                     |          |          |                      --0.08%--prepare_task_switch
+                                                                      |          |                     |                     |          |          |                                |          
+                                                                      |          |                     |                     |          |          |                                 --0.07%--__perf_event_task_sched_out
+                                                                      |          |                     |                     |          |          |          
+                                                                      |          |                     |                     |          |           --0.05%--hrtimer_sleeper_start_expires
+                                                                      |          |                     |                     |          |                     hrtimer_start_range_ns_user
+                                                                      |          |                     |                     |          |          
+                                                                      |          |                     |                     |           --0.06%--futex_wait_setup
+                                                                      |          |                     |                     |          
+                                                                      |          |                     |                      --0.05%--hrtimer_cancel
+                                                                      |          |                     |          
+                                                                      |          |                     |--0.50%--futex_wait_restart
+                                                                      |          |                     |          |          
+                                                                      |          |                     |           --0.49%--futex_wait
+                                                                      |          |                     |                     |          
+                                                                      |          |                     |                      --0.45%--__futex_wait
+                                                                      |          |                     |                                |          
+                                                                      |          |                     |                                 --0.40%--futex_do_wait
+                                                                      |          |                     |                                           |          
+                                                                      |          |                     |                                            --0.38%--schedule
+                                                                      |          |                     |                                                      |          
+                                                                      |          |                     |                                                       --0.37%--__schedule
+                                                                      |          |                     |                                                                 |          
+                                                                      |          |                     |                                                                 |--0.14%--try_to_block_task.constprop.0.isra.0
+                                                                      |          |                     |                                                                 |          |          
+                                                                      |          |                     |                                                                 |           --0.12%--__dequeue_task
+                                                                      |          |                     |                                                                 |                     |          
+                                                                      |          |                     |                                                                 |                      --0.08%--dequeue_hierarchy
+                                                                      |          |                     |                                                                 |                                |          
+                                                                      |          |                     |                                                                 |                                 --0.07%--dequeue_entity
+                                                                      |          |                     |                                                                 |                                           |          
+                                                                      |          |                     |                                                                 |                                            --0.06%--update_load_avg
+                                                                      |          |                     |                                                                 |          
+                                                                      |          |                     |                                                                  --0.06%--__pick_next_task
+                                                                      |          |                     |          
+                                                                      |          |                      --0.26%--exit_to_user_mode_loop
+                                                                      |          |                                |          
+                                                                      |          |                                 --0.26%--arch_do_signal_or_restart
+                                                                      |          |                                           |          
+                                                                      |          |                                            --0.25%--get_signal
+                                                                      |          |                                                      |          
+                                                                      |          |                                                       --0.23%--task_work_run
+                                                                      |          |                                                                 |          
+                                                                      |          |                                                                  --0.20%--tctx_task_work
+                                                                      |          |                                                                            tctx_task_work_run
+                                                                      |          |                                                                            |          
+                                                                      |          |                                                                             --0.13%--ctx_flush_and_put.isra.0
+                                                                      |          |                                                                                       |          
+                                                                      |          |                                                                                        --0.12%--__io_submit_flush_completions
+                                                                      |          |          
+                                                                      |          |--0.15%--entry_SYSRETQ_unsafe_stack
+                                                                      |          |          
+                                                                      |           --0.08%--syscall_return_via_sysret
+                                                                      |          
+                                                                       --0.16%--__syscall_cancel_arch_start
+                                                                                 |          
+                                                                                  --0.08%--__irqentry_text_end
+
+     0.31%     0.00%  bench_w03_exter  bench_w03_external_loop  [.] emplace_back<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+            |
+            ---emplace_back<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+               |          
+               |--0.18%--_M_push_back_aux<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+               |          |          
+               |           --0.13%--_M_allocate_node (inlined)
+               |                     allocate (inlined)
+               |                     allocate (inlined)
+               |                     allocate (inlined)
+               |                     |          
+               |                      --0.12%--operator new(unsigned long)
+               |                                |          
+               |                                 --0.09%--malloc
+               |          
+                --0.06%--construct<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight, (anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+                          construct_at<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight, (anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+                          Inflight (inlined)
+
+     0.18%     0.00%  bench_w03_exter  bench_w03_external_loop  [.] _M_push_back_aux<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+            |
+            ---_M_push_back_aux<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+               |          
+                --0.13%--_M_allocate_node (inlined)
+                          allocate (inlined)
+                          allocate (inlined)
+                          allocate (inlined)
+                          |          
+                           --0.12%--operator new(unsigned long)
+                                     |          
+                                      --0.09%--malloc
+
+     0.06%     0.00%  bench_w03_exter  bench_w03_external_loop  [.] construct<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight, (anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+            |
+            ---construct<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight, (anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+               construct_at<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight, (anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+               Inflight (inlined)
+
+     0.06%     0.00%  bench_w03_exter  bench_w03_external_loop  [.] construct_at<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight, (anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+            |
+            ---construct_at<(anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight, (anonymous namespace)::run_external_phase(const LoopParams&, const std::string&, bool, bool, bool)::Inflight> (inlined)
+               Inflight (inlined)
+
+
+
+#
+# (Tip: Use --symfs <dir>[,layout] if your symbol files are in non-standard locations.)
+#

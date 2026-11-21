@@ -1,0 +1,71 @@
+[0mchecking for g++ ... [38;5;2;1m/usr/lib64/ccache/g++[0m
+[0m[2mchecking for the c++ compiler (cxx) ... [38;5;2;1mg++[0m
+[0mchecking for /usr/lib64/ccache/g++ ... [38;5;2;1mok[0m
+[0m[2mchecking for flags (-fPIC) ... [38;5;2;1mok[0m
+[0m[2mchecking for flags (-fvisibility-inlines-hidden) ... [38;5;2;1mok[0m
+[0m[2mchecking for flags (-O3) ... [38;5;2;1mok[0m
+[0m[2mchecking for flags (-std=c++20) ... [38;5;2;1mok[0m
+[0m[2mchecking for flags (-DNDEBUG) ... [38;5;2;1mok[0m
+[0m[38;5;2;1m[ 15%]:[0m [2m[38;5;5;1m<bench_w02_pipeline>[0m cache compiling.release bench/bench_w02_pipeline.cpp[0m
+/usr/lib64/ccache/g++ -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 -std=c++20 -I/home/jnhu/Source/Sluice/bench -I/home/jnhu/Source/Sluice/include -DSLUICE_LIBURING_PROFILE=off -DNDEBUG -g -o /tmp/621-p4-build/noring/.objs/bench_w02_pipeline/linux/x86_64/release/bench/bench_w02_pipeline.cpp.o bench/bench_w02_pipeline.cpp
+[0m[2mchecking for flags (-MMD -MF) ... [38;5;2;1mok[0m
+[0m[2mchecking for flags (-Wno-gnu-line-marker -Werror) ... [38;5;2;1mok[0m
+[0m[2mchecking for the c++ compiler (cxx) ... [38;5;2;1mg++[0m
+[0m[38;5;2;1m[ 19%]:[0m [2m[38;5;5;1m<sluice_core>[0m cache compiling.release src/blocking_file.cpp[0m
+/usr/lib64/ccache/g++ -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 -std=c++20 -I/home/jnhu/Source/Sluice/include -DNDEBUG -g -o /tmp/621-p4-build/noring/.objs/sluice_core/linux/x86_64/release/src/blocking_file.cpp.o src/blocking_file.cpp
+[0m[2mchecking for the c++ compiler (cxx) ... [38;5;2;1mg++[0m
+[0m[38;5;2;1m[ 19%]:[0m [2m[38;5;5;1m<sluice_core>[0m cache compiling.release src/file_resource.cpp[0m
+/usr/lib64/ccache/g++ -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 -std=c++20 -I/home/jnhu/Source/Sluice/include -DNDEBUG -g -o /tmp/621-p4-build/noring/.objs/sluice_core/linux/x86_64/release/src/file_resource.cpp.o src/file_resource.cpp
+[0m[2mchecking for the c++ compiler (cxx) ... [38;5;2;1mg++[0m
+[0m[38;5;2;1m[ 19%]:[0m [2m[38;5;5;1m<sluice_async>[0m cache compiling.release src/async/fail_fast.cpp[0m
+/usr/lib64/ccache/g++ -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 -std=c++20 -I/home/jnhu/Source/Sluice/include -DSLUICE_LIBURING_PROFILE=off -DNDEBUG -g -o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/fail_fast.cpp.o src/async/fail_fast.cpp
+[0m[2mchecking for the c++ compiler (cxx) ... [38;5;2;1mg++[0m
+[0m[38;5;2;1m[ 19%]:[0m [2m[38;5;5;1m<sluice_async>[0m cache compiling.release src/async/async_io_context.cpp[0m
+/usr/lib64/ccache/g++ -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 -std=c++20 -I/home/jnhu/Source/Sluice/include -DSLUICE_LIBURING_PROFILE=off -DNDEBUG -g -o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/async_io_context.cpp.o src/async/async_io_context.cpp
+[0m[2mchecking for the c++ compiler (cxx) ... [38;5;2;1mg++[0m
+[0m[38;5;2;1m[ 19%]:[0m [2m[38;5;5;1m<sluice_async>[0m cache compiling.release src/async/uring_completion.cpp[0m
+/usr/lib64/ccache/g++ -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 -std=c++20 -I/home/jnhu/Source/Sluice/include -DSLUICE_LIBURING_PROFILE=off -DNDEBUG -g -o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/uring_completion.cpp.o src/async/uring_completion.cpp
+[0m[2mchecking for the c++ compiler (cxx) ... [38;5;2;1mg++[0m
+[0m[38;5;2;1m[ 19%]:[0m [2m[38;5;5;1m<sluice_async>[0m cache compiling.release src/async/uring_transport.cpp[0m
+/usr/lib64/ccache/g++ -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 -std=c++20 -I/home/jnhu/Source/Sluice/include -DSLUICE_LIBURING_PROFILE=off -DNDEBUG -g -o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/uring_transport.cpp.o src/async/uring_transport.cpp
+[0m[2mchecking for the c++ compiler (cxx) ... [38;5;2;1mg++[0m
+[0m[38;5;2;1m[ 19%]:[0m [2m[38;5;5;1m<sluice_async>[0m cache compiling.release src/async/uring_backend.cpp[0m
+/usr/lib64/ccache/g++ -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 -std=c++20 -I/home/jnhu/Source/Sluice/include -DSLUICE_LIBURING_PROFILE=off -DNDEBUG -g -o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/uring_backend.cpp.o src/async/uring_backend.cpp
+[0m[2mchecking for the c++ compiler (cxx) ... [38;5;2;1mg++[0m
+[0m[38;5;2;1m[ 19%]:[0m [2m[38;5;5;1m<sluice_async>[0m cache compiling.release src/async/request_scope.cpp[0m
+/usr/lib64/ccache/g++ -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 -std=c++20 -I/home/jnhu/Source/Sluice/include -DSLUICE_LIBURING_PROFILE=off -DNDEBUG -g -o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/request_scope.cpp.o src/async/request_scope.cpp
+[0m[2mchecking for the c++ compiler (cxx) ... [38;5;2;1mg++[0m
+[0m[38;5;2;1m[ 19%]:[0m [2m[38;5;5;1m<sluice_async>[0m cache compiling.release src/async/threadpool_backend.cpp[0m
+/usr/lib64/ccache/g++ -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 -std=c++20 -I/home/jnhu/Source/Sluice/include -DSLUICE_LIBURING_PROFILE=off -DNDEBUG -g -o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/threadpool_backend.cpp.o src/async/threadpool_backend.cpp
+[0m[2mchecking for the c++ compiler (cxx) ... [38;5;2;1mg++[0m
+[0m[38;5;2;1m[ 19%]:[0m [2m[38;5;5;1m<sluice_async>[0m cache compiling.release src/async/detail/request_core.cpp[0m
+/usr/lib64/ccache/g++ -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 -std=c++20 -I/home/jnhu/Source/Sluice/include -DSLUICE_LIBURING_PROFILE=off -DNDEBUG -g -o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/detail/request_core.cpp.o src/async/detail/request_core.cpp
+[0m[2mchecking for the c++ compiler (cxx) ... [38;5;2;1mg++[0m
+[0m[38;5;2;1m[ 19%]:[0m [2m[38;5;5;1m<bench_w03_external_loop>[0m cache compiling.release bench/bench_w03_external_loop.cpp[0m
+/usr/lib64/ccache/g++ -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 -std=c++20 -I/home/jnhu/Source/Sluice/bench -I/home/jnhu/Source/Sluice/include -DSLUICE_LIBURING_PROFILE=off -DNDEBUG -g -o /tmp/621-p4-build/noring/.objs/bench_w03_external_loop/linux/x86_64/release/bench/bench_w03_external_loop.cpp.o bench/bench_w03_external_loop.cpp
+[0m[2mchecking for the c++ compiler (cxx) ... [38;5;2;1mg++[0m
+[0m[38;5;2;1m[ 19%]:[0m [2m[38;5;5;1m<sluice_async>[0m cache compiling.release src/async/detail/context_identity.cpp[0m
+/usr/lib64/ccache/g++ -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 -std=c++20 -I/home/jnhu/Source/Sluice/include -DSLUICE_LIBURING_PROFILE=off -DNDEBUG -g -o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/detail/context_identity.cpp.o src/async/detail/context_identity.cpp
+[0mchecking for ar ... [38;5;2;1m/usr/sbin/ar[0m
+[0m[2mchecking for the static library archiver (ar) ... [38;5;2;1mar[0m
+[0m[38;5;2;1m[ 34%]:[0m [2m[38;5;5;1m<sluice_core>[0m [38;5;5;1marchiving.release libsluice_core.a[0m
+/usr/sbin/ar -cr -D /tmp/621-p4-build/noring/linux/x86_64/release/libsluice_core.a /tmp/621-p4-build/noring/.objs/sluice_core/linux/x86_64/release/src/blocking_file.cpp.o /tmp/621-p4-build/noring/.objs/sluice_core/linux/x86_64/release/src/file_resource.cpp.o
+[0m[38;5;2;1m[ 72%]:[0m [2m[38;5;5;1m<sluice_async>[0m [38;5;5;1marchiving.release libsluice_async.a[0m
+/usr/sbin/ar -cr -D /tmp/621-p4-build/noring/linux/x86_64/release/libsluice_async.a /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/async_io_context.cpp.o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/fail_fast.cpp.o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/request_scope.cpp.o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/threadpool_backend.cpp.o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/uring_backend.cpp.o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/uring_completion.cpp.o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/uring_transport.cpp.o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/detail/context_identity.cpp.o /tmp/621-p4-build/noring/.objs/sluice_async/linux/x86_64/release/src/async/detail/request_core.cpp.o
+[0mchecking for g++ ... [38;5;2;1m/usr/lib64/ccache/g++[0m
+[0m[2mchecking for the linker (ld) ... [38;5;2;1mg++[0m
+[0m[2mchecking for flags (-fPIC) ... [38;5;2;1mok[0m
+[0m[38;5;2;1m[ 79%]:[0m [2m[38;5;5;1m<bench_w02_pipeline>[0m [38;5;5;1mlinking.release bench_w02_pipeline[0m
+/usr/lib64/ccache/g++ -o /tmp/621-p4-build/noring/linux/x86_64/release/bench_w02_pipeline /tmp/621-p4-build/noring/.objs/bench_w02_pipeline/linux/x86_64/release/bench/bench_w02_pipeline.cpp.o -m64 -L/tmp/621-p4-build/noring/linux/x86_64/release -lsluice_async -lsluice_core -g
+[0m[2mchecking for the linker (ld) ... [38;5;2;1mg++[0m
+[0m[38;5;2;1m[ 87%]:[0m [2m[38;5;5;1m<bench_w03_external_loop>[0m [38;5;5;1mlinking.release bench_w03_external_loop[0m
+/usr/lib64/ccache/g++ -o /tmp/621-p4-build/noring/linux/x86_64/release/bench_w03_external_loop /tmp/621-p4-build/noring/.objs/bench_w03_external_loop/linux/x86_64/release/bench/bench_w03_external_loop.cpp.o -m64 -L/tmp/621-p4-build/noring/linux/x86_64/release -lsluice_async -lsluice_core -g
+[0mchecking for gcc ... [38;5;2;1m/usr/lib64/ccache/gcc[0m
+[0m[2mchecking for the c compiler (cc) ... [38;5;2;1mgcc[0m
+[0mchecking for /usr/lib64/ccache/gcc ... [38;5;2;1mok[0m
+[0m[2mchecking for flags (-fPIC) ... [38;5;2;1mok[0m
+[0m[2mchecking for flags (-O3) ... [38;5;2;1mok[0m
+[0m[2mchecking for flags (-DNDEBUG) ... [38;5;2;1mok[0m
+[0m[38;5;2;1mcreate ok![0m
+compile_commands.json updated!
+[0m[38;5;2;1m[100%]:[0m [2m[38;5;2;1mbuild ok, spent 2.233s[0m

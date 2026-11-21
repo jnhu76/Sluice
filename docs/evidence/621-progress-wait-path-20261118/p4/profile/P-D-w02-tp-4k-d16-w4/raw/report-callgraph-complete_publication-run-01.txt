@@ -1,0 +1,52 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 26K of event 'cycles'
+# Event count (approx.): 11572549879
+#
+# Children      Self  Command          Shared Object       Symbol                                                                                         
+# ........  ........  ...............  ..................  ...............................................................................................
+#
+     0.56%     0.06%  bench_w02_pipel  bench_w02_pipeline  [.] sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+            |          
+            |--0.50%--sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+            |          |          
+            |          |--0.27%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |          std::mutex::lock() (inlined)
+            |          |          __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          |          
+            |          |           --0.26%--pthread_mutex_lock@@GLIBC_2.2.5
+            |          |                     |          
+            |          |                      --0.09%--__GI___lll_lock_wait
+            |          |          
+            |           --0.22%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |                     std::mutex::unlock() (inlined)
+            |                     __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |                     |          
+            |                      --0.21%--__GI___pthread_mutex_unlock_usercnt
+            |                                |          
+            |                                 --0.08%--__GI___lll_lock_wake
+            |                                           |          
+            |                                            --0.05%--entry_SYSRETQ_unsafe_stack
+            |          
+             --0.06%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       __libc_start_call_main
+                       main
+                       (anonymous namespace)::run_one_repetition(bench::EnvConfig const&, (anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned long, unsigned long, bool)
+                       (anonymous namespace)::run_pipeline_phase((anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)
+                       sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                       sluice::Result<sluice::async::ScopeWaitStatus> sluice::async::RequestScope::wait_for_slot_<unsigned long>(sluice::async::RequestScope::Slot&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >) (inlined)
+                       sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                       sluice::async::AsyncIoContext::run_progress_pass_()
+                       sluice::async::ThreadPoolBackend::poll_progress()
+                       sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)
+                       sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+
+
+
+#
+# (Tip: To show time in nanoseconds in record/report add --ns)
+#

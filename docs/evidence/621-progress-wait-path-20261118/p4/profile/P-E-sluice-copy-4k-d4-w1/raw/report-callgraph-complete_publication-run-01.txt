@@ -1,0 +1,35 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 34K of event 'cycles'
+# Event count (approx.): 14719584144
+#
+# Children      Self  Command      Shared Object  Symbol                                                                                         
+# ........  ........  ...........  .............  ...............................................................................................
+#
+     0.37%     0.03%  sluice-copy  sluice-copy    [.] sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+            |          
+            |--0.21%--std::mutex::unlock() (inlined)
+            |          |          
+            |           --0.15%--__gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |                     |          
+            |                      --0.05%--0x41049d
+            |          
+             --0.11%--0x41042c
+
+     0.09%     0.01%  sluice-copy  sluice-copy    [.] sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+            |          
+             --0.07%--sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+
+     0.08%     0.01%  sluice-copy  sluice-copy    [.] sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+            |          
+             --0.07%--sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+
+     0.05%     0.01%  sluice-copy  sluice-copy    [.] sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+
+
+#
+# (Tip: Treat branches as callchains: perf record -b ... ; perf report --branch-history)
+#

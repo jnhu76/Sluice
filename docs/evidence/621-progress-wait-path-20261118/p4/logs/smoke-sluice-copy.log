@@ -1,0 +1,8 @@
+== source ==
+fc2b9cc95b513d0e4980474b1b516f8bdb9ad5fbd1c4d6902a95c04789db2a34  /tmp/621-p4-smoke/src-1m.bin
+1048576 bytes
+/tmp/621-p4-build/copy/linux/x86_64/release/sluice-copy: copied 1048576 bytes (read_ops=260 write_ops=256 short_writes=0 sync=none pipeline_depth=4 atomic=on)
+COPY_EXIT=0
+== destination ==
+fc2b9cc95b513d0e4980474b1b516f8bdb9ad5fbd1c4d6902a95c04789db2a34  /tmp/621-p4-smoke/dst-1m.bin
+CMP_OK

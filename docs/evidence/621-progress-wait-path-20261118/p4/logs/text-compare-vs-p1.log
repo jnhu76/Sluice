@@ -1,0 +1,48 @@
+== P1 artifact identities ==
+03dbef098d41e6d6a5280a46d46758ca7267326925ae95d1156ad8d8c3c6a896  /tmp/621-p1-build/ring/linux/x86_64/release/bench_w02_pipeline
+43054fcd59f7000553d34a2f5b2909ff7ae6dae78910d4f379a8e8b0129937c1  /tmp/621-p1-build/ring/linux/x86_64/release/bench_w03_external_loop
+edb76b108f01dd5c325a6ec5aab4319533d1a256b6e62af958ea09994793b426  /tmp/621-p1-build/noring/linux/x86_64/release/bench_w02_pipeline
+6c1d2a8faa73166949b0ebc1513b39d274f398eb9a4febe00e34a62c0bbee941  /tmp/621-p1-build/noring/linux/x86_64/release/bench_w03_external_loop
+db972b1946fcf2b282135ebdf600263b03492215b08846e867d856c6213fa0be  /tmp/621-p1-build/copy/linux/x86_64/release/sluice-copy
+== .text section layout ==
+-- ring/bench_w02_pipeline
+P1:
+  [ 4] .text             PROGBITS        0000000000400940 000940 028d30 00  AX  0   0 64
+NEW:
+  [ 4] .text             PROGBITS        0000000000400940 000940 028d30 00  AX  0   0 64
+-- ring/bench_w03_external_loop
+P1:
+  [ 4] .text             PROGBITS        0000000000400940 000940 023b30 00  AX  0   0 64
+NEW:
+  [ 4] .text             PROGBITS        0000000000400940 000940 023b30 00  AX  0   0 64
+-- noring/bench_w02_pipeline
+P1:
+  [ 4] .text             PROGBITS        00000000004008c0 0008c0 022390 00  AX  0   0 64
+NEW:
+  [ 4] .text             PROGBITS        00000000004008c0 0008c0 022390 00  AX  0   0 64
+-- noring/bench_w03_external_loop
+P1:
+  [ 4] .text             PROGBITS        00000000004008c0 0008c0 01d130 00  AX  0   0 64
+NEW:
+  [ 4] .text             PROGBITS        00000000004008c0 0008c0 01d130 00  AX  0   0 64
+-- copy/sluice-copy
+P1:
+  [ 4] .text             PROGBITS        0000000000400780 000780 0108f0 00  AX  0   0 64
+NEW:
+  [ 4] .text             PROGBITS        0000000000400780 000780 0108f0 00  AX  0   0 64
+== section byte comparisons ==
+IDENTICAL ring-bench_w02_pipeline .text (167216 bytes) sha256=436f8e21fc3cffe1d79755c20ad8da0841c6ecad19b378608b54ffa6affbf4df
+IDENTICAL ring-bench_w02_pipeline .rodata (11208 bytes) sha256=5e8dfaefcb902dcc1363821eeb2cd661d7354a98526e55357a6602c9aa4a6215
+IDENTICAL ring-bench_w02_pipeline .data (16 bytes) sha256=9d34149fbd1fe777eb238799054c8cbfbce372255f219f8740838def9bfd02db
+IDENTICAL ring-bench_w03_external_loop .text (146224 bytes) sha256=efbe1dd6e8afa4ed0c6c0780b16b2a0741ecf1da31a9004002acff33f9bc2b6c
+IDENTICAL ring-bench_w03_external_loop .rodata (11240 bytes) sha256=cce950f0bd5e102a1302100ba78d41f22d858d8c493389996af5cd17a6072e8b
+IDENTICAL ring-bench_w03_external_loop .data (16 bytes) sha256=9d34149fbd1fe777eb238799054c8cbfbce372255f219f8740838def9bfd02db
+IDENTICAL noring-bench_w02_pipeline .text (140176 bytes) sha256=43f7f875741642bfef1a9646dfd995739a557dc59c8e7a4cbdbdd2b43b3ad261
+IDENTICAL noring-bench_w02_pipeline .rodata (8264 bytes) sha256=ff5c6c5bc3e9fee3a6b592c2752906573374dbe6d6d4893ea129268f9d1f6086
+IDENTICAL noring-bench_w02_pipeline .data (16 bytes) sha256=9d34149fbd1fe777eb238799054c8cbfbce372255f219f8740838def9bfd02db
+IDENTICAL noring-bench_w03_external_loop .text (119088 bytes) sha256=4ac68b7b4a7f2c73e8215753bb15fc8d6e10424eb2180657adbafb227b4c1a96
+IDENTICAL noring-bench_w03_external_loop .rodata (8296 bytes) sha256=e80242f437401611ba2acd8d483deba441a64799e557bc40dc1ad8743c70c234
+IDENTICAL noring-bench_w03_external_loop .data (16 bytes) sha256=9d34149fbd1fe777eb238799054c8cbfbce372255f219f8740838def9bfd02db
+IDENTICAL copy-sluice-copy .text (67824 bytes) sha256=4b3ae86a637bc17168e22cf6a40d9c928fb197006108898fb45c1d037e1dba6e
+IDENTICAL copy-sluice-copy .rodata (5552 bytes) sha256=5f5b1c90d8d0b5c50b71005b9830f6a0c696ff09944f8f1ba0042e343980ce90
+IDENTICAL copy-sluice-copy .data (16 bytes) sha256=9d34149fbd1fe777eb238799054c8cbfbce372255f219f8740838def9bfd02db

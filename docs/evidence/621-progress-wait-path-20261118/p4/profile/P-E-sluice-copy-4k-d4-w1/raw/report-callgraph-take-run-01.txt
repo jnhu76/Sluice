@@ -1,0 +1,187 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 34K of event 'cycles'
+# Event count (approx.): 14719584144
+#
+# Children      Self  Command      Shared Object  Symbol                                                                                                                                                  
+# ........  ........  ...........  .............  ........................................................................................................................................................
+#
+     1.15%     0.32%  sluice-copy  sluice-copy    [.] sluice::async::RequestScope::take(sluice::async::ScopeTicket<unsigned long> const&)
+            |          
+            |--0.83%--sluice::async::RequestScope::take(sluice::async::ScopeTicket<unsigned long> const&)
+            |          sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+            |          sluice::async::Request<unsigned long>::take_result() (inlined)
+            |          |          
+            |          |--0.50%--0x410af9
+            |          |          |          
+            |          |           --0.48%--0x410af9
+            |          |                     |          
+            |          |                     |--0.26%--0x410b01
+            |          |                     |          0x410b01
+            |          |                     |          0x410b01
+            |          |                     |          |          
+            |          |                     |           --0.25%--0x7f9af5167ddc
+            |          |                     |          
+            |          |                      --0.10%--0x410a5a
+            |          |                                0x410a5a
+            |          |                                0x410a5a
+            |          |                                |          
+            |          |                                 --0.10%--0x7f9af516641a
+            |          |          
+            |          |--0.16%--sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+            |          |          |          
+            |          |           --0.15%--sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) (inlined)
+            |          |                     |          
+            |          |                      --0.08%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |                                std::mutex::unlock() (inlined)
+            |          |                                __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |                                |          
+            |          |                                 --0.07%--__GI___pthread_mutex_unlock_usercnt
+            |          |          
+            |           --0.15%--0x410b01
+            |                     |          
+            |                      --0.14%--0x410b01
+            |                                |          
+            |                                 --0.08%--0x410b01
+            |                                           0x410b01
+            |                                           0x410b01
+            |                                           |          
+            |                                            --0.08%--0x7f30df967ddc
+            |          
+             --0.32%--_start
+                       |          
+                       |--0.19%--0x7f9af50f3797
+                       |          0x7f9af50f3680
+                       |          0x401e0b
+                       |          0x403281
+                       |          0x402a41
+                       |          0x402a41
+                       |          0x402a41
+                       |          |          
+                       |          |--0.13%--0x402a41
+                       |          |          0x402a41
+                       |          |          0x40a759
+                       |          |          |          
+                       |          |           --0.13%--0x40a759
+                       |          |                     |          
+                       |          |                     |--0.06%--0x40a831
+                       |          |                     |          
+                       |          |                      --0.06%--0x40a759
+                       |          |                                |          
+                       |          |                                 --0.06%--0x40a759
+                       |          |          
+                       |           --0.06%--0x402d02
+                       |                     0x402d02
+                       |                     0x40a7e4
+                       |                     |          
+                       |                      --0.05%--0x40a7e4
+                       |          
+                       |--0.07%--0x7f30df8f3797
+                       |          0x7f30df8f3680
+                       |          0x401e0b
+                       |          0x403281
+                       |          0x402a41
+                       |          0x402a41
+                       |          0x402a41
+                       |          |          
+                       |           --0.05%--0x402a41
+                       |                     0x402a41
+                       |                     |          
+                       |                      --0.05%--0x40a870
+                       |          
+                        --0.06%--__libc_start_main@@GLIBC_2.34
+                                  __libc_start_call_main
+                                  main
+                                  sluice_copy::run_pipelined_copy(sluice::File const&, sluice::async::NativeFileRef const&, unsigned long, unsigned long, unsigned int, sluice_copy::SyncPolicy)
+                                  sluice_copy::run_pipelined_copy_with_context(sluice::File const&, sluice::async::NativeFileRef const&, unsigned long, unsigned long, unsigned int, sluice_copy::SyncPolicy, sluice::async::AsyncIoContext)
+                                  operator() (inlined)
+                                  run_body (inlined)
+
+     0.23%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+            |
+            ---sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+               |          
+                --0.20%--sluice::async::Request<unsigned long>::take_result() (inlined)
+                          |          
+                           --0.17%--sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+                                     |          
+                                      --0.16%--sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) (inlined)
+                                                |          
+                                                 --0.09%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+                                                           std::mutex::unlock() (inlined)
+                                                           __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+                                                           |          
+                                                            --0.09%--__GI___pthread_mutex_unlock_usercnt
+
+     0.23%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+            |
+            ---sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+               |          
+                --0.20%--sluice::async::Request<unsigned long>::take_result() (inlined)
+                          |          
+                           --0.17%--sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+                                     |          
+                                      --0.17%--sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) (inlined)
+                                                |          
+                                                 --0.10%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+                                                           std::mutex::unlock() (inlined)
+                                                           __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+                                                           |          
+                                                            --0.09%--__GI___pthread_mutex_unlock_usercnt
+
+     0.22%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+            |
+            ---sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+               |          
+                --0.19%--sluice::async::Request<unsigned long>::take_result() (inlined)
+                          |          
+                           --0.16%--sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+                                     |          
+                                      --0.15%--sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) (inlined)
+                                                |          
+                                                 --0.08%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+                                                           std::mutex::unlock() (inlined)
+                                                           __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+                                                           |          
+                                                            --0.08%--__GI___pthread_mutex_unlock_usercnt
+
+     0.22%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+            |
+            ---sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+               |          
+                --0.18%--sluice::async::Request<unsigned long>::take_result() (inlined)
+                          |          
+                           --0.16%--sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+                                     |          
+                                      --0.15%--sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) (inlined)
+                                                |          
+                                                 --0.08%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+                                                           std::mutex::unlock() (inlined)
+                                                           __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+                                                           |          
+                                                            --0.07%--__GI___pthread_mutex_unlock_usercnt
+
+     0.18%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+            |
+            ---sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+               |          
+                --0.16%--sluice::async::Request<unsigned long>::take_result() (inlined)
+                          |          
+                           --0.13%--sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+                                     |          
+                                      --0.12%--sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) (inlined)
+                                                |          
+                                                 --0.07%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+                                                           std::mutex::unlock() (inlined)
+                                                           __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+                                                           |          
+                                                            --0.06%--__GI___pthread_mutex_unlock_usercnt
+
+
+
+#
+# (Tip: To add Node.js USDT(User-Level Statically Defined Tracing): perf buildid-cache --add `which node`)
+#

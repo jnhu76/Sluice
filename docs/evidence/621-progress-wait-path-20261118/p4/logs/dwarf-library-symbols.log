@@ -1,0 +1,21 @@
+== /tmp/621-p4-build/ring/linux/x86_64/release/bench_w02_pipeline
+symbol: 0000000000429290 T sluice::File::open(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, sluice::FileOpen)
+sluice::File::open(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, sluice::FileOpen)
+/home/jnhu/Source/Sluice/src/file_resource.cpp:68
+symbol: 000000000041a690 T sluice::async::RequestScope::submit_sync_data(sluice::async::SyncDataOp)
+sluice::async::RequestScope::submit_sync_data(sluice::async::SyncDataOp)
+/home/jnhu/Source/Sluice/src/async/request_scope.cpp:189
+== /tmp/621-p4-build/ring/linux/x86_64/release/bench_w03_external_loop
+symbol: 0000000000424090 T sluice::File::open(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, sluice::FileOpen)
+sluice::File::open(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, sluice::FileOpen)
+/home/jnhu/Source/Sluice/src/file_resource.cpp:68
+symbol: 00000000004017d0 t sluice::async::AsyncIoContext::submit_size(sluice::async::SizeOp) [clone .cold]
+__gthread_mutex_unlock(pthread_mutex_t*)
+/usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:825
+== /tmp/621-p4-build/copy/linux/x86_64/release/sluice-copy
+symbol: 0000000000410c90 T sluice::File::open(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, sluice::FileOpen)
+sluice::File::open(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, sluice::FileOpen)
+/home/jnhu/Source/Sluice/src/file_resource.cpp:68
+symbol: 000000000040a310 T sluice::async::RequestScope::submit_sync_data(sluice::async::SyncDataOp)
+sluice::async::RequestScope::submit_sync_data(sluice::async::SyncDataOp)
+/home/jnhu/Source/Sluice/src/async/request_scope.cpp:189

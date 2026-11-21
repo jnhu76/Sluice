@@ -1,0 +1,147 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 34K of event 'cycles'
+# Event count (approx.): 14719584144
+#
+# Children      Self  Command      Shared Object  Symbol                                                                                      
+# ........  ........  ...........  .............  ............................................................................................
+#
+     0.98%     0.08%  sluice-copy  sluice-copy    [.] sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)
+            |          
+            |--0.90%--sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)
+            |          |          
+            |          |--0.42%--sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)
+            |          |          |          
+            |          |          |--0.20%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          |          std::mutex::unlock() (inlined)
+            |          |          |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |          |          
+            |          |          |           --0.20%--__GI___pthread_mutex_unlock_usercnt
+            |          |          |          
+            |          |          |--0.11%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |          |          std::mutex::lock() (inlined)
+            |          |          |          __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          |          pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          |          
+            |          |           --0.08%--sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey) (inlined)
+            |          |          
+            |          |--0.31%--sluice::async::ThreadPoolBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind) (inlined)
+            |          |          |          
+            |          |          |--0.19%--sluice::async::detail::RequestCore::retire_observer_delivery(sluice::async::detail::RequestKey)
+            |          |          |          |          
+            |          |          |          |--0.09%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |          |          |          std::mutex::lock() (inlined)
+            |          |          |          |          __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          |          |          pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          |          |          
+            |          |          |           --0.08%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          |                     std::mutex::unlock() (inlined)
+            |          |          |                     __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |                     |          
+            |          |          |                      --0.07%--__GI___pthread_mutex_unlock_usercnt
+            |          |          |          
+            |          |           --0.13%--sluice::async::detail::RequestCore::claim_observer_delivery(sluice::async::detail::RequestKey)
+            |          |                     |          
+            |          |                      --0.06%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |                                std::mutex::lock() (inlined)
+            |          |                                __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |                                |          
+            |          |                                 --0.06%--pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          
+            |           --0.17%--sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+            |                     |          
+            |                     |--0.07%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |                     |          std::mutex::unlock() (inlined)
+            |                     |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |                     |          |          
+            |                     |           --0.06%--__GI___pthread_mutex_unlock_usercnt
+            |                     |          
+            |                      --0.05%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |                                std::mutex::lock() (inlined)
+            |                                __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |                                |          
+            |                                 --0.05%--pthread_mutex_lock@@GLIBC_2.2.5
+            |          
+             --0.08%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       __libc_start_call_main
+                       main
+                       sluice_copy::run_pipelined_copy(sluice::File const&, sluice::async::NativeFileRef const&, unsigned long, unsigned long, unsigned int, sluice_copy::SyncPolicy)
+                       sluice_copy::run_pipelined_copy_with_context(sluice::File const&, sluice::async::NativeFileRef const&, unsigned long, unsigned long, unsigned int, sluice_copy::SyncPolicy, sluice::async::AsyncIoContext)
+                       operator() (inlined)
+                       run_body (inlined)
+                       await_slot_write (inlined)
+                       wait_take<long unsigned int> (inlined)
+                       sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                       sluice::Result<sluice::async::ScopeWaitStatus> sluice::async::RequestScope::wait_for_slot_<unsigned long>(sluice::async::RequestScope::Slot&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >) (inlined)
+                       sluice::async::AsyncIoContext::wait_one()
+                       sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                       sluice::async::AsyncIoContext::run_progress_pass_()
+                       sluice::async::ThreadPoolBackend::poll_progress()
+                       sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)
+
+     0.38%     0.03%  sluice-copy  sluice-copy    [.] sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)
+            |          
+             --0.34%--sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)
+                       |          
+                       |--0.14%--sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)
+                       |          |          
+                       |           --0.06%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+                       |                     std::mutex::unlock() (inlined)
+                       |                     __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+                       |                     |          
+                       |                      --0.05%--__GI___pthread_mutex_unlock_usercnt
+                       |          
+                       |--0.13%--sluice::async::ThreadPoolBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind) (inlined)
+                       |          |          
+                       |          |--0.07%--sluice::async::detail::RequestCore::retire_observer_delivery(sluice::async::detail::RequestKey)
+                       |          |          
+                       |           --0.06%--sluice::async::detail::RequestCore::claim_observer_delivery(sluice::async::detail::RequestKey)
+                       |          
+                        --0.08%--sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+
+     0.36%     0.03%  sluice-copy  sluice-copy    [.] sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)
+            |          
+             --0.33%--sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)
+                       |          
+                       |--0.14%--sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)
+                       |          |          
+                       |           --0.06%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+                       |                     std::mutex::unlock() (inlined)
+                       |                     __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+                       |                     __GI___pthread_mutex_unlock_usercnt
+                       |          
+                       |--0.12%--sluice::async::ThreadPoolBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind) (inlined)
+                       |          |          
+                       |           --0.07%--sluice::async::detail::RequestCore::retire_observer_delivery(sluice::async::detail::RequestKey)
+                       |          
+                        --0.06%--sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+
+     0.29%     0.02%  sluice-copy  sluice-copy    [.] sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)
+            |          
+             --0.27%--sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)
+                       |          
+                       |--0.13%--sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)
+                       |          |          
+                       |           --0.06%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+                       |                     std::mutex::unlock() (inlined)
+                       |                     __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+                       |                     |          
+                       |                      --0.05%--__GI___pthread_mutex_unlock_usercnt
+                       |          
+                       |--0.07%--sluice::async::ThreadPoolBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind) (inlined)
+                       |          
+                        --0.06%--sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+
+     0.07%     0.01%  sluice-copy  sluice-copy    [.] sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)
+            |          
+             --0.06%--sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)
+
+
+
+#
+# (Tip: Sample related events with: perf record -e '{cycles,instructions}:S')
+#

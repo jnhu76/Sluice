@@ -1,0 +1,11 @@
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1 stats_wiring=off
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0647s 309217 ops/s 1207.9 MiB/s cpu=0.122s util=189.0% | lat p50=52711 p95=86699 p99=102016 max=215751 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0669s 298924 ops/s 1167.7 MiB/s cpu=0.127s util=189.3% | lat p50=53078 p95=85392 p99=99326 max=131643 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+[ perf record: Woken up 186 times to write data ]
+[ perf record: Captured and wrote 46.390 MB /home/jnhu/Source/Sluice/docs/evidence/621-progress-wait-path-20261118/p4/profile/P-D-w02-tp-4k-d16-w4/raw/smoke-cycles.data (5806 samples) ]

@@ -1,0 +1,94 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 16K of event 'cycles'
+# Event count (approx.): 9475932130
+#
+# Children      Self  Command          Shared Object       Symbol                                                                                              
+# ........  ........  ...............  ..................  ....................................................................................................
+#
+     2.08%     1.15%  bench_w02_pipel  bench_w02_pipeline  [.] sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)
+            |          
+            |--1.15%--_start
+            |          __libc_start_main@@GLIBC_2.34
+            |          __libc_start_call_main
+            |          main
+            |          (anonymous namespace)::run_one_repetition(bench::EnvConfig const&, (anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned long, unsigned long, bool)
+            |          (anonymous namespace)::run_pipeline_phase((anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)
+            |          sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+            |          sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+            |          sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+            |          sluice::Result<sluice::async::detail::RequestKey> sluice::async::UringAsyncBackend::submit_request<sluice::async::ReadOp>(sluice::async::ReadOp, sluice::async::detail::OperationKind, sluice::async::detail::RequestOp) (inlined)
+            |          sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+            |          sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)
+            |          |          
+            |          |--0.41%--sluice::async::UringAsyncBackend::TransportLedger::append(sluice::async::UringAsyncBackend::TransportLedger::Kind, unsigned int, unsigned long, sluice::async::detail::RequestReservation) (inlined)
+            |          |          
+            |          |--0.25%--io_uring_get_sqe (inlined)
+            |          |          _io_uring_get_sqe (inlined)
+            |          |          |          
+            |          |           --0.09%--io_uring_initialize_sqe (inlined)
+            |          |          
+            |           --0.16%--std::unique_ptr<sluice::async::UringRingState, std::default_delete<sluice::async::UringRingState> >::operator->() const (inlined)
+            |                     std::unique_ptr<sluice::async::UringRingState, std::default_delete<sluice::async::UringRingState> >::get() const (inlined)
+            |                     std::__uniq_ptr_impl<sluice::async::UringRingState, std::default_delete<sluice::async::UringRingState> >::_M_ptr() const (inlined)
+            |          
+             --0.93%--sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)
+                       |          
+                       |--0.33%--io_uring_get_sqe (inlined)
+                       |          _io_uring_get_sqe (inlined)
+                       |          |          
+                       |          |--0.19%--asm_sysvec_reschedule_ipi
+                       |          |          |          
+                       |          |           --0.17%--irqentry_exit
+                       |          |                     arch_do_signal_or_restart
+                       |          |                     get_signal
+                       |          |                     |          
+                       |          |                      --0.13%--task_work_run
+                       |          |                                |          
+                       |          |                                 --0.11%--tctx_task_work
+                       |          |                                           tctx_task_work_run
+                       |          |                                           |          
+                       |          |                                            --0.09%--ctx_flush_and_put.isra.0
+                       |          |                                                      __io_submit_flush_completions
+                       |          |          
+                       |           --0.11%--__irqentry_text_end
+                       |          
+                       |--0.26%--sluice::async::detail::RequestCore::claim_execution(sluice::async::detail::RequestKey)
+                       |          |          
+                       |          |--0.12%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+                       |          |          std::mutex::lock() (inlined)
+                       |          |          |          
+                       |          |           --0.11%--__gthread_mutex_lock(pthread_mutex_t*) (inlined)
+                       |          |                     pthread_mutex_lock@@GLIBC_2.2.5
+                       |          |          
+                       |           --0.09%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+                       |                     std::mutex::unlock() (inlined)
+                       |                     __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+                       |          
+                       |--0.16%--sluice::async::UringAsyncBackend::TransportLedger::append(sluice::async::UringAsyncBackend::TransportLedger::Kind, unsigned int, unsigned long, sluice::async::detail::RequestReservation) (inlined)
+                       |          |          
+                       |           --0.13%--asm_sysvec_reschedule_ipi
+                       |                     |          
+                       |                      --0.11%--irqentry_exit
+                       |                                |          
+                       |                                 --0.10%--arch_do_signal_or_restart
+                       |                                           get_signal
+                       |                                           task_work_run
+                       |                                           |          
+                       |                                            --0.08%--tctx_task_work
+                       |                                                      tctx_task_work_run
+                       |                                                      |          
+                       |                                                       --0.06%--ctx_flush_and_put.isra.0
+                       |          
+                        --0.07%--std::unique_ptr<sluice::async::UringRingState, std::default_delete<sluice::async::UringRingState> >::operator->() const (inlined)
+                                  std::unique_ptr<sluice::async::UringRingState, std::default_delete<sluice::async::UringRingState> >::get() const (inlined)
+                                  std::__uniq_ptr_impl<sluice::async::UringRingState, std::default_delete<sluice::async::UringRingState> >::_M_ptr() const (inlined)
+
+
+
+#
+# (Tip: Add -I to perf record to sample register values, which will be visible in perf report sample context.)
+#

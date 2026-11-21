@@ -1,0 +1,448 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 34K of event 'cycles'
+# Event count (approx.): 14719584144
+#
+# Children      Self  Command      Shared Object  Symbol                                                                                                                                                                                                
+# ........  ........  ...........  .............  ......................................................................................................................................................................................................
+#
+     7.84%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::detail::ProgressSource::wait_if_unchanged(sluice::async::detail::ProgressSource::Token, std::chrono::duration<long, std::ratio<1l, 1000000000l> >, bool (*)(void*) noexcept, void*) (inlined)
+            |          
+            |--3.87%--sluice::async::detail::ProgressSource::wait_if_unchanged(sluice::async::detail::ProgressSource::Token, std::chrono::duration<long, std::ratio<1l, 1000000000l> >, bool (*)(void*) noexcept, void*) (inlined)
+            |          |          
+            |          |--2.59%--__poll
+            |          |          |          
+            |          |           --2.57%--__syscall_cancel
+            |          |                     |          
+            |          |                      --2.56%--__internal_syscall_cancel
+            |          |                                |          
+            |          |                                 --2.50%--__syscall_cancel_arch_end
+            |          |                                           |          
+            |          |                                           |--1.90%--entry_SYSCALL_64_after_hwframe
+            |          |                                           |          |          
+            |          |                                           |           --1.89%--do_syscall_64
+            |          |                                           |                     |          
+            |          |                                           |                      --1.85%--__x64_sys_poll
+            |          |                                           |                                do_sys_poll
+            |          |                                           |                                |          
+            |          |                                           |                                |--1.57%--do_poll.constprop.0
+            |          |                                           |                                |          |          
+            |          |                                           |                                |          |--1.30%--poll_schedule_timeout.constprop.0
+            |          |                                           |                                |          |          |          
+            |          |                                           |                                |          |           --1.17%--schedule_hrtimeout_range_clock
+            |          |                                           |                                |          |                     |          
+            |          |                                           |                                |          |                      --1.15%--schedule
+            |          |                                           |                                |          |                                |          
+            |          |                                           |                                |          |                                 --1.13%--__schedule
+            |          |                                           |                                |          |                                           |          
+            |          |                                           |                                |          |                                           |--0.50%--try_to_block_task.constprop.0.isra.0
+            |          |                                           |                                |          |                                           |          |          
+            |          |                                           |                                |          |                                           |           --0.46%--__dequeue_task
+            |          |                                           |                                |          |                                           |                     |          
+            |          |                                           |                                |          |                                           |                     |--0.27%--dequeue_hierarchy
+            |          |                                           |                                |          |                                           |                     |          |          
+            |          |                                           |                                |          |                                           |                     |           --0.20%--dequeue_entity
+            |          |                                           |                                |          |                                           |                     |                     |          
+            |          |                                           |                                |          |                                           |                     |                      --0.15%--update_load_avg
+            |          |                                           |                                |          |                                           |                     |                                |          
+            |          |                                           |                                |          |                                           |                     |                                 --0.06%--update_cfs_rq_load_avg
+            |          |                                           |                                |          |                                           |                     |                                           |          
+            |          |                                           |                                |          |                                           |                     |                                            --0.06%--__update_load_avg_cfs_rq
+            |          |                                           |                                |          |                                           |                     |          
+            |          |                                           |                                |          |                                           |                      --0.14%--update_curr
+            |          |                                           |                                |          |                                           |                                |          
+            |          |                                           |                                |          |                                           |                                 --0.10%--update_se
+            |          |                                           |                                |          |                                           |          
+            |          |                                           |                                |          |                                           |--0.14%--psi_task_switch
+            |          |                                           |                                |          |                                           |          |          
+            |          |                                           |                                |          |                                           |           --0.10%--psi_group_change
+            |          |                                           |                                |          |                                           |          
+            |          |                                           |                                |          |                                           |--0.14%--__pick_next_task
+            |          |                                           |                                |          |                                           |          
+            |          |                                           |                                |          |                                           |--0.13%--prepare_task_switch
+            |          |                                           |                                |          |                                           |          |          
+            |          |                                           |                                |          |                                           |           --0.13%--__perf_event_task_sched_out
+            |          |                                           |                                |          |                                           |                     |          
+            |          |                                           |                                |          |                                           |                      --0.12%--perf_event_context_sched_out
+            |          |                                           |                                |          |                                           |                                |          
+            |          |                                           |                                |          |                                           |                                 --0.09%--perf_ctx_disable
+            |          |                                           |                                |          |                                           |                                           |          
+            |          |                                           |                                |          |                                           |                                            --0.06%--intel_pmu_disable_all
+            |          |                                           |                                |          |                                           |                                                      native_write_msr
+            |          |                                           |                                |          |                                           |          
+            |          |                                           |                                |          |                                            --0.12%--finish_task_switch.isra.0
+            |          |                                           |                                |          |                                                      |          
+            |          |                                           |                                |          |                                                       --0.07%--__perf_event_task_sched_in
+            |          |                                           |                                |          |          
+            |          |                                           |                                |           --0.14%--eventfd_poll
+            |          |                                           |                                |          
+            |          |                                           |                                 --0.14%--poll_freewait
+            |          |                                           |                                           |          
+            |          |                                           |                                           |--0.08%--remove_wait_queue
+            |          |                                           |                                           |          |          
+            |          |                                           |                                           |           --0.07%--__raw_spin_lock_irqsave
+            |          |                                           |                                           |          
+            |          |                                           |                                            --0.06%--fput
+            |          |                                           |          
+            |          |                                           |--0.31%--entry_SYSRETQ_unsafe_stack
+            |          |                                           |          
+            |          |                                           |--0.15%--syscall_return_via_sysret
+            |          |                                           |          
+            |          |                                            --0.11%--entry_SYSCALL_64
+            |          |          
+            |          |--0.86%--sluice::async::detail::ProgressSource::drain_notification_nolock_() (inlined)
+            |          |          |          
+            |          |           --0.85%--read
+            |          |                     |          
+            |          |                      --0.84%--__syscall_cancel
+            |          |                                |          
+            |          |                                 --0.84%--__internal_syscall_cancel
+            |          |                                           |          
+            |          |                                            --0.84%--__syscall_cancel_arch_end
+            |          |                                                      |          
+            |          |                                                      |--0.36%--entry_SYSCALL_64_after_hwframe
+            |          |                                                      |          |          
+            |          |                                                      |           --0.36%--do_syscall_64
+            |          |                                                      |                     |          
+            |          |                                                      |                      --0.32%--ksys_read
+            |          |                                                      |                                |          
+            |          |                                                      |                                |--0.16%--vfs_read
+            |          |                                                      |                                |          |          
+            |          |                                                      |                                |           --0.06%--eventfd_read
+            |          |                                                      |                                |          
+            |          |                                                      |                                 --0.10%--fput
+            |          |                                                      |          
+            |          |                                                      |--0.34%--entry_SYSRETQ_unsafe_stack
+            |          |                                                      |          
+            |          |                                                       --0.11%--syscall_return_via_sysret
+            |          |          
+            |          |--0.22%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |          std::mutex::lock() (inlined)
+            |          |          __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          |          
+            |          |           --0.19%--pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          
+            |           --0.16%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |                     std::mutex::unlock() (inlined)
+            |                     __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |                     |          
+            |                      --0.16%--__GI___pthread_mutex_unlock_usercnt
+            |                                |          
+            |                                 --0.06%--__GI___lll_lock_wake
+            |          
+            |--3.59%--0x408111
+            |          |          
+            |          |--2.41%--0x7f9afc1abe3d
+            |          |          |          
+            |          |           --2.40%--0x7f9afc132593
+            |          |                     |          
+            |          |                      --2.40%--0x7f9afc13254b
+            |          |                                |          
+            |          |                                 --2.36%--0x7f9afc13e352
+            |          |                                           |          
+            |          |                                           |--1.82%--0xffffffffaec0012f
+            |          |                                           |          |          
+            |          |                                           |           --1.81%--0xffffffffb0408a7e
+            |          |                                           |                     |          
+            |          |                                           |                      --1.78%--0xffffffffaf516002
+            |          |                                           |                                |          
+            |          |                                           |                                 --1.78%--0xffffffffaf5151e3
+            |          |                                           |                                           |          
+            |          |                                           |                                           |--1.49%--0xffffffffaf514f56
+            |          |                                           |                                           |          |          
+            |          |                                           |                                           |          |--1.22%--0xffffffffaf5138a7
+            |          |                                           |                                           |          |          |          
+            |          |                                           |                                           |          |           --1.10%--0xffffffffb0420555
+            |          |                                           |                                           |          |                     |          
+            |          |                                           |                                           |          |                      --1.07%--0xffffffffb0418558
+            |          |                                           |                                           |          |                                |          
+            |          |                                           |                                           |          |                                 --1.05%--0xffffffffb0417f8c
+            |          |                                           |                                           |          |                                           |          
+            |          |                                           |                                           |          |                                           |--0.44%--0xffffffffaf0493ee
+            |          |                                           |                                           |          |                                           |          |          
+            |          |                                           |                                           |          |                                           |           --0.41%--0xffffffffaf0651ea
+            |          |                                           |                                           |          |                                           |                     |          
+            |          |                                           |                                           |          |                                           |                     |--0.22%--0xffffffffaf063141
+            |          |                                           |                                           |          |                                           |                     |          |          
+            |          |                                           |                                           |          |                                           |                     |           --0.17%--0xffffffffaf05afae
+            |          |                                           |                                           |          |                                           |                     |                     |          
+            |          |                                           |                                           |          |                                           |                     |                      --0.10%--0xffffffffaf05ae24
+            |          |                                           |                                           |          |                                           |                     |          
+            |          |                                           |                                           |          |                                           |                      --0.11%--0xffffffffaf062b56
+            |          |                                           |                                           |          |                                           |                                |          
+            |          |                                           |                                           |          |                                           |                                 --0.09%--0xffffffffaf056345
+            |          |                                           |                                           |          |                                           |          
+            |          |                                           |                                           |          |                                           |--0.14%--0xffffffffaf041d7f
+            |          |                                           |                                           |          |                                           |          |          
+            |          |                                           |                                           |          |                                           |           --0.13%--0xffffffffaf34ae52
+            |          |                                           |                                           |          |                                           |                     |          
+            |          |                                           |                                           |          |                                           |                      --0.13%--0xffffffffaf3483d8
+            |          |                                           |                                           |          |                                           |                                |          
+            |          |                                           |                                           |          |                                           |                                 --0.10%--0xffffffffaf340cd7
+            |          |                                           |                                           |          |                                           |                                           |          
+            |          |                                           |                                           |          |                                           |                                            --0.06%--0xffffffffaef0e3b9
+            |          |                                           |                                           |          |                                           |                                                      0xffffffffaefa3b51
+            |          |                                           |                                           |          |                                           |          
+            |          |                                           |                                           |          |                                           |--0.12%--0xffffffffaf0bff3a
+            |          |                                           |                                           |          |                                           |          |          
+            |          |                                           |                                           |          |                                           |           --0.10%--0xffffffffaf0b0ef2
+            |          |                                           |                                           |          |                                           |          
+            |          |                                           |                                           |          |                                           |--0.11%--0xffffffffaf044aff
+            |          |                                           |                                           |          |                                           |          |          
+            |          |                                           |                                           |          |                                           |           --0.08%--0xffffffffaf34aa9c
+            |          |                                           |                                           |          |                                           |          
+            |          |                                           |                                           |          |                                            --0.10%--0xffffffffaf043f3c
+            |          |                                           |                                           |          |          
+            |          |                                           |                                           |          |--0.14%--0xffffffffaf57ec4e
+            |          |                                           |                                           |          |          
+            |          |                                           |                                           |           --0.06%--0xffffffffaf523b56
+            |          |                                           |                                           |          
+            |          |                                           |                                           |--0.15%--0xffffffffaf513a07
+            |          |                                           |                                           |          |          
+            |          |                                           |                                           |          |--0.08%--0xffffffffaf0b2888
+            |          |                                           |                                           |          |          |          
+            |          |                                           |                                           |          |           --0.08%--0xffffffffaf0c3f36
+            |          |                                           |                                           |          |          
+            |          |                                           |                                           |           --0.06%--0xffffffffaf4f1548
+            |          |                                           |                                           |          
+            |          |                                           |                                            --0.06%--0xffffffffb0412a22
+            |          |                                           |          
+            |          |                                           |--0.30%--0xffffffffaec001c8
+            |          |                                           |          
+            |          |                                           |--0.11%--0xffffffffaec00172
+            |          |                                           |          
+            |          |                                            --0.11%--0xffffffffaec000a3
+            |          |          
+            |          |--0.77%--0x408111
+            |          |          |          
+            |          |           --0.77%--0x7f9afc1ac49d
+            |          |                     |          
+            |          |                      --0.76%--0x7f9afc132593
+            |          |                                |          
+            |          |                                 --0.76%--0x7f9afc13254b
+            |          |                                           |          
+            |          |                                            --0.74%--0x7f9afc13e352
+            |          |                                                      |          
+            |          |                                                      |--0.33%--0xffffffffaec0012f
+            |          |                                                      |          |          
+            |          |                                                      |           --0.33%--0xffffffffb0408a7e
+            |          |                                                      |                     |          
+            |          |                                                      |                      --0.30%--0xffffffffaf4ef43b
+            |          |                                                      |                                |          
+            |          |                                                      |                                |--0.16%--0xffffffffaf4ee72d
+            |          |                                                      |                                |          |          
+            |          |                                                      |                                |          |--0.08%--0xffffffffaf4ebae1
+            |          |                                                      |                                |          |          |          
+            |          |                                                      |                                |          |           --0.06%--0xffffffffaf82ea6b
+            |          |                                                      |                                |          |          
+            |          |                                                      |                                |           --0.07%--0xffffffffaf57f645
+            |          |                                                      |                                |          
+            |          |                                                      |                                 --0.06%--0xffffffffaf4f1538
+            |          |                                                      |          
+            |          |                                                      |--0.31%--0xffffffffaec001c8
+            |          |                                                      |          
+            |          |                                                       --0.07%--0xffffffffaec001bb
+            |          |          
+            |          |--0.24%--0x4081ec
+            |          |          0x4081ec
+            |          |          0x4081ec
+            |          |          |          
+            |          |           --0.21%--0x7f9afc13941a
+            |          |          
+            |           --0.14%--0x40838e
+            |                     0x40838e
+            |                     0x40838e
+            |                     |          
+            |                      --0.14%--0x7f9afc13ade9
+            |          
+             --0.38%--0x408140
+                       |          
+                       |--0.26%--0x7f9afc1abe3d
+                       |          |          
+                       |           --0.25%--0x7f9afc132593
+                       |                     |          
+                       |                      --0.25%--0x7f9afc13254b
+                       |                                |          
+                       |                                 --0.24%--0x7f9afc13e352
+                       |                                           |          
+                       |                                            --0.19%--0xffffffffaec0012f
+                       |                                                      0xffffffffb0408a7e
+                       |                                                      |          
+                       |                                                       --0.18%--0xffffffffaf516002
+                       |                                                                 0xffffffffaf5152e2
+                       |                                                                 |          
+                       |                                                                  --0.14%--0xffffffffaf515077
+                       |                                                                            |          
+                       |                                                                             --0.11%--0xffffffffaf5138a7
+                       |                                                                                       |          
+                       |                                                                                        --0.11%--0xffffffffb0420555
+                       |                                                                                                  0xffffffffb0418558
+                       |                                                                                                  0xffffffffb04180f8
+                       |          
+                        --0.06%--0x408111
+                                  |          
+                                   --0.06%--0x7f9afc1ac49d
+                                             0x7f9afc132593
+                                             0x7f9afc13254b
+                                             0x7f9afc13e352
+
+     3.76%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::detail::ProgressSource::wait_if_unchanged(sluice::async::detail::ProgressSource::Token, std::chrono::duration<long, std::ratio<1l, 1000000000l> >, bool (*)(void*) noexcept, void*) (inlined)
+            |
+            ---sluice::async::detail::ProgressSource::wait_if_unchanged(sluice::async::detail::ProgressSource::Token, std::chrono::duration<long, std::ratio<1l, 1000000000l> >, bool (*)(void*) noexcept, void*) (inlined)
+               |          
+               |--2.57%--__poll
+               |          |          
+               |           --2.56%--__syscall_cancel
+               |                     |          
+               |                      --2.54%--__internal_syscall_cancel
+               |                                |          
+               |                                 --2.48%--__syscall_cancel_arch_end
+               |                                           |          
+               |                                           |--1.92%--entry_SYSCALL_64_after_hwframe
+               |                                           |          |          
+               |                                           |           --1.92%--do_syscall_64
+               |                                           |                     |          
+               |                                           |                      --1.87%--__x64_sys_poll
+               |                                           |                                |          
+               |                                           |                                 --1.86%--do_sys_poll
+               |                                           |                                           |          
+               |                                           |                                           |--1.59%--do_poll.constprop.0
+               |                                           |                                           |          |          
+               |                                           |                                           |          |--1.31%--poll_schedule_timeout.constprop.0
+               |                                           |                                           |          |          |          
+               |                                           |                                           |          |           --1.18%--schedule_hrtimeout_range_clock
+               |                                           |                                           |          |                     |          
+               |                                           |                                           |          |                      --1.17%--schedule
+               |                                           |                                           |          |                                |          
+               |                                           |                                           |          |                                 --1.15%--__schedule
+               |                                           |                                           |          |                                           |          
+               |                                           |                                           |          |                                           |--0.51%--try_to_block_task.constprop.0.isra.0
+               |                                           |                                           |          |                                           |          |          
+               |                                           |                                           |          |                                           |           --0.45%--__dequeue_task
+               |                                           |                                           |          |                                           |                     |          
+               |                                           |                                           |          |                                           |                     |--0.25%--dequeue_hierarchy
+               |                                           |                                           |          |                                           |                     |          |          
+               |                                           |                                           |          |                                           |                     |           --0.17%--dequeue_entity
+               |                                           |                                           |          |                                           |                     |                     |          
+               |                                           |                                           |          |                                           |                     |                      --0.13%--update_load_avg
+               |                                           |                                           |          |                                           |                     |          
+               |                                           |                                           |          |                                           |                      --0.13%--update_curr
+               |                                           |                                           |          |                                           |                                |          
+               |                                           |                                           |          |                                           |                                 --0.10%--update_se
+               |                                           |                                           |          |                                           |          
+               |                                           |                                           |          |                                           |--0.18%--psi_task_switch
+               |                                           |                                           |          |                                           |          |          
+               |                                           |                                           |          |                                           |           --0.14%--psi_group_change
+               |                                           |                                           |          |                                           |          
+               |                                           |                                           |          |                                           |--0.11%--prepare_task_switch
+               |                                           |                                           |          |                                           |          |          
+               |                                           |                                           |          |                                           |           --0.11%--__perf_event_task_sched_out
+               |                                           |                                           |          |                                           |                     |          
+               |                                           |                                           |          |                                           |                      --0.10%--perf_event_context_sched_out
+               |                                           |                                           |          |                                           |                                |          
+               |                                           |                                           |          |                                           |                                 --0.09%--perf_ctx_disable
+               |                                           |                                           |          |                                           |                                           |          
+               |                                           |                                           |          |                                           |                                            --0.06%--intel_pmu_disable_all
+               |                                           |                                           |          |                                           |                                                      native_write_msr
+               |                                           |                                           |          |                                           |          
+               |                                           |                                           |          |                                           |--0.11%--finish_task_switch.isra.0
+               |                                           |                                           |          |                                           |          |          
+               |                                           |                                           |          |                                           |           --0.07%--__perf_event_task_sched_in
+               |                                           |                                           |          |                                           |          
+               |                                           |                                           |          |                                            --0.10%--__pick_next_task
+               |                                           |                                           |          |          
+               |                                           |                                           |          |--0.16%--eventfd_poll
+               |                                           |                                           |          |          
+               |                                           |                                           |           --0.05%--fdget
+               |                                           |                                           |          
+               |                                           |                                            --0.14%--poll_freewait
+               |                                           |                                                      |          
+               |                                           |                                                       --0.10%--remove_wait_queue
+               |                                           |                                                                 |          
+               |                                           |                                                                  --0.09%--__raw_spin_lock_irqsave
+               |                                           |          
+               |                                           |--0.29%--entry_SYSRETQ_unsafe_stack
+               |                                           |          
+               |                                           |--0.14%--syscall_return_via_sysret
+               |                                           |          
+               |                                            --0.12%--entry_SYSCALL_64
+               |          
+               |--0.83%--sluice::async::detail::ProgressSource::drain_notification_nolock_() (inlined)
+               |          |          
+               |           --0.83%--read
+               |                     __syscall_cancel
+               |                     |          
+               |                      --0.83%--__internal_syscall_cancel
+               |                                |          
+               |                                 --0.81%--__syscall_cancel_arch_end
+               |                                           |          
+               |                                           |--0.38%--entry_SYSCALL_64_after_hwframe
+               |                                           |          |          
+               |                                           |           --0.37%--do_syscall_64
+               |                                           |                     |          
+               |                                           |                      --0.33%--ksys_read
+               |                                           |                                |          
+               |                                           |                                |--0.16%--vfs_read
+               |                                           |                                |          |          
+               |                                           |                                |           --0.08%--eventfd_read
+               |                                           |                                |          
+               |                                           |                                |--0.07%--fput
+               |                                           |                                |          
+               |                                           |                                 --0.06%--fdget_pos
+               |                                           |          
+               |                                           |--0.31%--entry_SYSRETQ_unsafe_stack
+               |                                           |          
+               |                                            --0.10%--syscall_return_via_sysret
+               |          
+               |--0.18%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+               |          std::mutex::lock() (inlined)
+               |          __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+               |          |          
+               |           --0.17%--pthread_mutex_lock@@GLIBC_2.2.5
+               |          
+                --0.14%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+                          std::mutex::unlock() (inlined)
+                          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+                          |          
+                           --0.12%--__GI___pthread_mutex_unlock_usercnt
+
+     0.26%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::detail::ProgressSource::wait_if_unchanged(sluice::async::detail::ProgressSource::Token, std::chrono::duration<long, std::ratio<1l, 1000000000l> >, bool (*)(void*) noexcept, void*) (inlined)
+            |
+            ---sluice::async::detail::ProgressSource::wait_if_unchanged(sluice::async::detail::ProgressSource::Token, std::chrono::duration<long, std::ratio<1l, 1000000000l> >, bool (*)(void*) noexcept, void*) (inlined)
+               |          
+               |--0.16%--__poll
+               |          |          
+               |           --0.16%--__syscall_cancel
+               |                     |          
+               |                      --0.15%--__internal_syscall_cancel
+               |                                |          
+               |                                 --0.15%--__syscall_cancel_arch_end
+               |                                           |          
+               |                                            --0.11%--entry_SYSCALL_64_after_hwframe
+               |                                                      do_syscall_64
+               |                                                      __x64_sys_poll
+               |                                                      do_sys_poll
+               |                                                      |          
+               |                                                       --0.10%--do_poll.constprop.0
+               |                                                                 |          
+               |                                                                  --0.07%--poll_schedule_timeout.constprop.0
+               |                                                                            |          
+               |                                                                             --0.06%--schedule_hrtimeout_range_clock
+               |                                                                                       schedule
+               |                                                                                       |          
+               |                                                                                        --0.06%--__schedule
+               |          
+                --0.05%--sluice::async::detail::ProgressSource::drain_notification_nolock_() (inlined)
+                          read
+                          __syscall_cancel
+                          __internal_syscall_cancel
+                          __syscall_cancel_arch_end
+
+
+
+#
+# (Tip: Generate a script for your data: perf script -g <lang>)
+#

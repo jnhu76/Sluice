@@ -1,0 +1,48 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 29K of event 'cycles'
+# Event count (approx.): 12992695735
+#
+# Children      Self  Command          Shared Object            Symbol                                                                                      
+# ........  ........  ...............  .......................  ............................................................................................
+#
+     0.72%     0.08%  bench_w03_exter  bench_w03_external_loop  [.] sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)
+            |          
+            |--0.64%--sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)
+            |          |          
+            |          |--0.37%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |          std::mutex::lock() (inlined)
+            |          |          __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          
+            |           --0.25%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |                     std::mutex::unlock() (inlined)
+            |                     __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |                     |          
+            |                      --0.25%--__GI___pthread_mutex_unlock_usercnt
+            |                                |          
+            |                                 --0.05%--__GI___lll_lock_wake
+            |          
+             --0.08%--__GI___clone3
+                       start_thread
+                       execute_native_thread_routine
+                       (anonymous namespace)::driver_thread(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&)
+                       sluice::async::AsyncIoContext::poll_progress()
+                       sluice::async::AsyncIoContext::run_progress_pass_()
+                       sluice::async::UringAsyncBackend::poll_progress()
+                       sluice::async::UringAsyncBackend::poll() (inlined)
+                       sluice::async::UringAsyncBackend::poll() [clone .part.0]
+                       sluice::async::UringAsyncBackend::reap_cqes()
+                       operator() (inlined)
+                       sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)
+                       sluice::async::UringAsyncBackend::finalize_operation_terminal_(sluice::async::UringAsyncBackend::RouterEntry&, unsigned long, sluice::detail::IoOutcome const&, sluice::FileInfo const*)
+                       sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)
+
+
+
+#
+# (Tip: To collect Processor Trace with samples use perf record -e '{intel_pt//,cycles}' ; perf script --call-trace or --insn-trace --xed -F +ipc (remove --xed if no xed))
+#

@@ -1,0 +1,32 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 29K of event 'cycles'
+# Event count (approx.): 12992695735
+#
+# Children      Self  Command          Shared Object            Symbol                                                                             
+# ........  ........  ...............  .......................  ...................................................................................
+#
+     0.26%     0.26%  bench_w03_exter  bench_w03_external_loop  [.] sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const
+            |
+            ---__GI___clone3
+               start_thread
+               execute_native_thread_routine
+               (anonymous namespace)::driver_thread(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&)
+               sluice::async::AsyncIoContext::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::UringAsyncBackend::poll() (inlined)
+               sluice::async::UringAsyncBackend::poll() [clone .part.0]
+               sluice::async::UringAsyncBackend::reap_cqes()
+               operator() (inlined)
+               sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)
+               sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const
+
+
+
+#
+# (Tip: Generate a script for your data: perf script -g <lang>)
+#

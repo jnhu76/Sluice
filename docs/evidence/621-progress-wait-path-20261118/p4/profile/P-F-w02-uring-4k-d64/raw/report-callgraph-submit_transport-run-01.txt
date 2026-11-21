@@ -1,0 +1,321 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 16K of event 'cycles'
+# Event count (approx.): 9475932130
+#
+# Children      Self  Command          Shared Object       Symbol                                                         
+# ........  ........  ...............  ..................  ...............................................................
+#
+    33.42%     0.00%  bench_w02_pipel  bench_w02_pipeline  [.] sluice::async::UringAsyncBackend::submit_transport_locked() (inlined)
+            |
+            ---sluice::async::UringAsyncBackend::submit_transport_locked() (inlined)
+               |          
+                --33.41%--sluice::async::UringAsyncBackend::submit_transport_locked() (inlined)
+                          |          
+                          |--32.48%--__io_uring_submit
+                          |          |          
+                          |          |--24.95%--entry_SYSCALL_64_after_hwframe
+                          |          |          |          
+                          |          |           --24.90%--do_syscall_64
+                          |          |                     |          
+                          |          |                     |--18.64%--__do_sys_io_uring_enter
+                          |          |                     |          |          
+                          |          |                     |          |--17.09%--io_submit_sqes
+                          |          |                     |          |          |          
+                          |          |                     |          |           --16.85%--io_submit_sqe
+                          |          |                     |          |                     |          
+                          |          |                     |          |                     |--11.90%--io_wq_enqueue
+                          |          |                     |          |                     |          |          
+                          |          |                     |          |                     |          |--10.61%--io_acct_activate_free_worker
+                          |          |                     |          |                     |          |          |          
+                          |          |                     |          |                     |          |          |--10.06%--try_to_wake_up
+                          |          |                     |          |                     |          |          |          |          
+                          |          |                     |          |                     |          |          |          |--4.26%--ttwu_do_activate
+                          |          |                     |          |                     |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |--3.60%--enqueue_task
+                          |          |                     |          |                     |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |--2.68%--enqueue_task_fair
+                          |          |                     |          |                     |          |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |          |--0.51%--update_curr
+                          |          |                     |          |                     |          |          |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |          |           --0.14%--update_se
+                          |          |                     |          |                     |          |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |          |--0.45%--enqueue_entity
+                          |          |                     |          |                     |          |          |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |          |           --0.27%--update_load_avg
+                          |          |                     |          |                     |          |          |          |          |          |          |                     |          
+                          |          |                     |          |                     |          |          |          |          |          |          |                      --0.20%--update_cfs_rq_load_avg
+                          |          |                     |          |                     |          |          |          |          |          |          |                                |          
+                          |          |                     |          |                     |          |          |          |          |          |          |                                 --0.14%--__update_load_avg_cfs_rq
+                          |          |                     |          |                     |          |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |          |--0.35%--calc_concur_shares
+                          |          |                     |          |                     |          |          |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |          |           --0.29%--tg_cpus
+                          |          |                     |          |                     |          |          |          |          |          |          |                     |          
+                          |          |                     |          |                     |          |          |          |          |          |          |                      --0.22%--cpuset_num_cpus
+                          |          |                     |          |                     |          |          |          |          |          |          |                                |          
+                          |          |                     |          |                     |          |          |          |          |          |          |                                 --0.13%--__bitmap_weight
+                          |          |                     |          |                     |          |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |          |--0.19%--reweight_entity
+                          |          |                     |          |                     |          |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |          |--0.15%--place_entity
+                          |          |                     |          |                     |          |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |          |--0.10%--update_cfs_rq_load_avg
+                          |          |                     |          |                     |          |          |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |          |           --0.09%--__update_load_avg_cfs_rq
+                          |          |                     |          |                     |          |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |          |--0.08%--__calc_smp_shares
+                          |          |                     |          |                     |          |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |          |--0.08%--hrtimer_active
+                          |          |                     |          |                     |          |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |           --0.07%--__update_load_avg_se
+                          |          |                     |          |                     |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |           --0.80%--psi_task_change
+                          |          |                     |          |                     |          |          |          |          |                     |          
+                          |          |                     |          |                     |          |          |          |          |                      --0.70%--psi_group_change
+                          |          |                     |          |                     |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |           --0.63%--wakeup_preempt
+                          |          |                     |          |                     |          |          |          |                     |          
+                          |          |                     |          |                     |          |          |          |                     |--0.37%--wakeup_preempt_fair
+                          |          |                     |          |                     |          |          |          |                     |          |          
+                          |          |                     |          |                     |          |          |          |                     |          |--0.16%--pick_eevdf
+                          |          |                     |          |                     |          |          |          |                     |          |          
+                          |          |                     |          |                     |          |          |          |                     |           --0.11%--update_curr
+                          |          |                     |          |                     |          |          |          |                     |          
+                          |          |                     |          |                     |          |          |          |                      --0.25%--__resched_curr
+                          |          |                     |          |                     |          |          |          |          
+                          |          |                     |          |                     |          |          |          |--1.38%--_raw_spin_unlock_irqrestore
+                          |          |                     |          |                     |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |           --0.85%--asm_sysvec_reschedule_ipi
+                          |          |                     |          |                     |          |          |          |                     |          
+                          |          |                     |          |                     |          |          |          |                      --0.16%--sysvec_reschedule_ipi
+                          |          |                     |          |                     |          |          |          |                                |          
+                          |          |                     |          |                     |          |          |          |                                 --0.15%--irqentry_enter
+                          |          |                     |          |                     |          |          |          |          
+                          |          |                     |          |                     |          |          |          |--0.93%--enqueue_task
+                          |          |                     |          |                     |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |--0.31%--requeue_delayed_entity
+                          |          |                     |          |                     |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |           --0.15%--__update_load_avg_se
+                          |          |                     |          |                     |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |--0.26%--psi_task_change
+                          |          |                     |          |                     |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |           --0.20%--psi_group_change
+                          |          |                     |          |                     |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |--0.23%--enqueue_task_fair
+                          |          |                     |          |                     |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |           --0.18%--update_curr
+                          |          |                     |          |                     |          |          |          |          |                     |          
+                          |          |                     |          |                     |          |          |          |          |                      --0.08%--update_se
+                          |          |                     |          |                     |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |           --0.11%--clear_delayed.part.0
+                          |          |                     |          |                     |          |          |          |          
+                          |          |                     |          |                     |          |          |          |--0.72%--select_task_rq
+                          |          |                     |          |                     |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |--0.44%--select_idle_sibling
+                          |          |                     |          |                     |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |          |--0.16%--choose_idle_cpu
+                          |          |                     |          |                     |          |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |          |           --0.15%--select_idle_cpu
+                          |          |                     |          |                     |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |           --0.13%--select_task_rq_fair
+                          |          |                     |          |                     |          |          |          |          
+                          |          |                     |          |                     |          |          |          |--0.56%--___task_rq_lock
+                          |          |                     |          |                     |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |           --0.54%--raw_spin_rq_lock_nested
+                          |          |                     |          |                     |          |          |          |                     |          
+                          |          |                     |          |                     |          |          |          |                     |--0.37%--native_queued_spin_lock_slowpath
+                          |          |                     |          |                     |          |          |          |                     |          
+                          |          |                     |          |                     |          |          |          |                      --0.16%--_raw_spin_lock
+                          |          |                     |          |                     |          |          |          |          
+                          |          |                     |          |                     |          |          |          |--0.46%--__raw_spin_lock_irqsave
+                          |          |                     |          |                     |          |          |          |          
+                          |          |                     |          |                     |          |          |          |--0.27%--update_rq_clock_task
+                          |          |                     |          |                     |          |          |          |          
+                          |          |                     |          |                     |          |          |          |--0.22%--ttwu_queue_wakelist
+                          |          |                     |          |                     |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |           --0.08%--__smp_call_single_queue
+                          |          |                     |          |                     |          |          |          |          
+                          |          |                     |          |                     |          |          |          |--0.20%--wakeup_preempt
+                          |          |                     |          |                     |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |           --0.16%--wakeup_preempt_fair
+                          |          |                     |          |                     |          |          |          |                     |          
+                          |          |                     |          |                     |          |          |          |                      --0.06%--update_curr
+                          |          |                     |          |                     |          |          |          |          
+                          |          |                     |          |                     |          |          |          |--0.18%--raw_spin_rq_lock_nested
+                          |          |                     |          |                     |          |          |          |          |          
+                          |          |                     |          |                     |          |          |          |           --0.16%--_raw_spin_lock
+                          |          |                     |          |                     |          |          |          |          
+                          |          |                     |          |                     |          |          |           --0.15%--update_rq_clock
+                          |          |                     |          |                     |          |          |          
+                          |          |                     |          |                     |          |           --0.19%--io_worker_release
+                          |          |                     |          |                     |          |          
+                          |          |                     |          |                     |          |--0.46%--_raw_spin_lock
+                          |          |                     |          |                     |          |          
+                          |          |                     |          |                     |           --0.11%--native_queued_spin_lock_slowpath
+                          |          |                     |          |                     |          
+                          |          |                     |          |                     |--2.03%--io_prep_rw
+                          |          |                     |          |                     |          |          
+                          |          |                     |          |                     |          |--1.32%--__io_prep_rw
+                          |          |                     |          |                     |          |          |          
+                          |          |                     |          |                     |          |           --0.96%--io_rw_alloc_async
+                          |          |                     |          |                     |          |                     |          
+                          |          |                     |          |                     |          |                      --0.87%--io_cache_alloc_new
+                          |          |                     |          |                     |          |                                |          
+                          |          |                     |          |                     |          |                                 --0.85%--__kmalloc_noprof
+                          |          |                     |          |                     |          |                                           |          
+                          |          |                     |          |                     |          |                                           |--0.30%--memset_orig
+                          |          |                     |          |                     |          |                                           |          
+                          |          |                     |          |                     |          |                                            --0.06%--asm_sysvec_reschedule_ipi
+                          |          |                     |          |                     |          |          
+                          |          |                     |          |                     |           --0.30%--__io_import_rw_buffer
+                          |          |                     |          |                     |                     |          
+                          |          |                     |          |                     |                      --0.20%--import_ubuf
+                          |          |                     |          |                     |          
+                          |          |                     |          |                     |--1.32%--io_issue_sqe
+                          |          |                     |          |                     |          |          
+                          |          |                     |          |                     |          |--0.92%--__io_issue_sqe
+                          |          |                     |          |                     |          |          |          
+                          |          |                     |          |                     |          |           --0.89%--io_read
+                          |          |                     |          |                     |          |                     |          
+                          |          |                     |          |                     |          |                      --0.68%--__io_read
+                          |          |                     |          |                     |          |                                |          
+                          |          |                     |          |                     |          |                                |--0.28%--io_rw_init_file
+                          |          |                     |          |                     |          |                                |          |          
+                          |          |                     |          |                     |          |                                |           --0.09%--io_file_get_flags
+                          |          |                     |          |                     |          |                                |          
+                          |          |                     |          |                     |          |                                 --0.15%--io_file_supports_nowait
+                          |          |                     |          |                     |          |          
+                          |          |                     |          |                     |           --0.31%--io_file_get_normal
+                          |          |                     |          |                     |                     |          
+                          |          |                     |          |                     |                      --0.24%--fget
+                          |          |                     |          |                     |          
+                          |          |                     |          |                     |--1.13%--io_queue_iowq
+                          |          |                     |          |                     |          |          
+                          |          |                     |          |                     |           --1.08%--io_prep_async_link
+                          |          |                     |          |                     |                     |          
+                          |          |                     |          |                     |                      --1.03%--io_prep_async_work
+                          |          |                     |          |                     |          
+                          |          |                     |          |                     |--0.23%--io_queue_async
+                          |          |                     |          |                     |          |          
+                          |          |                     |          |                     |           --0.06%--io_arm_poll_handler
+                          |          |                     |          |                     |          
+                          |          |                     |          |                     |--0.12%--io_init_req
+                          |          |                     |          |                     |          
+                          |          |                     |          |                      --0.07%--io_prep_read
+                          |          |                     |          |          
+                          |          |                     |          |--0.50%--mutex_unlock
+                          |          |                     |          |          
+                          |          |                     |          |--0.39%--io_uring_ctx_get_file
+                          |          |                     |          |          |          
+                          |          |                     |          |           --0.36%--fget
+                          |          |                     |          |          
+                          |          |                     |          |--0.30%--fput
+                          |          |                     |          |          
+                          |          |                     |           --0.16%--mutex_lock
+                          |          |                     |          
+                          |          |                     |--5.74%--exit_to_user_mode_loop
+                          |          |                     |          |          
+                          |          |                     |           --5.68%--arch_do_signal_or_restart
+                          |          |                     |                     |          
+                          |          |                     |                      --5.64%--get_signal
+                          |          |                     |                                |          
+                          |          |                     |                                 --5.19%--task_work_run
+                          |          |                     |                                           |          
+                          |          |                     |                                           |--4.43%--tctx_task_work
+                          |          |                     |                                           |          |          
+                          |          |                     |                                           |           --4.38%--tctx_task_work_run
+                          |          |                     |                                           |                     |          
+                          |          |                     |                                           |                     |--3.38%--ctx_flush_and_put.isra.0
+                          |          |                     |                                           |                     |          |          
+                          |          |                     |                                           |                     |          |--3.15%--__io_submit_flush_completions
+                          |          |                     |                                           |                     |          |          |          
+                          |          |                     |                                           |                     |          |          |--1.11%--io_eventfd_signal
+                          |          |                     |                                           |                     |          |          |          |          
+                          |          |                     |                                           |                     |          |          |          |--0.17%--_raw_spin_lock
+                          |          |                     |                                           |                     |          |          |          |          
+                          |          |                     |                                           |                     |          |          |          |--0.14%--native_queued_spin_lock_slowpath
+                          |          |                     |                                           |                     |          |          |          |          
+                          |          |                     |                                           |                     |          |          |          |--0.13%--io_eventfd_put
+                          |          |                     |                                           |                     |          |          |          |          
+                          |          |                     |                                           |                     |          |          |           --0.08%--eventfd_signal_mask
+                          |          |                     |                                           |                     |          |          |                     __raw_spin_lock_irqsave
+                          |          |                     |                                           |                     |          |          |          
+                          |          |                     |                                           |                     |          |          |--0.93%--io_free_batch_list
+                          |          |                     |                                           |                     |          |          |          |          
+                          |          |                     |                                           |                     |          |          |          |--0.57%--fput
+                          |          |                     |                                           |                     |          |          |          |          
+                          |          |                     |                                           |                     |          |          |           --0.11%--kfree
+                          |          |                     |                                           |                     |          |          |          
+                          |          |                     |                                           |                     |          |          |--0.46%--_raw_spin_lock
+                          |          |                     |                                           |                     |          |          |          
+                          |          |                     |                                           |                     |          |          |--0.11%--__io_commit_cqring_flush
+                          |          |                     |                                           |                     |          |          |          
+                          |          |                     |                                           |                     |          |           --0.09%--native_queued_spin_lock_slowpath
+                          |          |                     |                                           |                     |          |          
+                          |          |                     |                                           |                     |           --0.21%--mutex_unlock
+                          |          |                     |                                           |                     |          
+                          |          |                     |                                           |                     |--0.13%--mutex_lock
+                          |          |                     |                                           |                     |          
+                          |          |                     |                                           |                     |--0.09%--asm_sysvec_reschedule_ipi
+                          |          |                     |                                           |                     |          
+                          |          |                     |                                           |                      --0.08%--io_req_task_complete
+                          |          |                     |                                           |          
+                          |          |                     |                                           |--0.09%--_raw_spin_unlock_irq
+                          |          |                     |                                           |          
+                          |          |                     |                                           |--0.09%--_raw_spin_lock_irq
+                          |          |                     |                                           |          
+                          |          |                     |                                            --0.08%--asm_sysvec_reschedule_ipi
+                          |          |                     |          
+                          |          |                      --0.16%--asm_sysvec_reschedule_ipi
+                          |          |          
+                          |          |--3.94%--entry_SYSRETQ_unsafe_stack
+                          |          |          
+                          |          |--1.29%--syscall_return_via_sysret
+                          |          |          
+                          |          |--0.99%--entry_SYSCALL_64
+                          |          |          
+                          |          |--0.66%--asm_sysvec_reschedule_ipi
+                          |          |          |          
+                          |          |           --0.48%--irqentry_exit
+                          |          |                     |          
+                          |          |                      --0.46%--arch_do_signal_or_restart
+                          |          |                                |          
+                          |          |                                 --0.46%--get_signal
+                          |          |                                           |          
+                          |          |                                            --0.38%--task_work_run
+                          |          |                                                      |          
+                          |          |                                                       --0.33%--tctx_task_work
+                          |          |                                                                 |          
+                          |          |                                                                  --0.32%--tctx_task_work_run
+                          |          |                                                                            |          
+                          |          |                                                                             --0.27%--ctx_flush_and_put.isra.0
+                          |          |                                                                                       |          
+                          |          |                                                                                        --0.25%--__io_submit_flush_completions
+                          |          |                                                                                                  |          
+                          |          |                                                                                                  |--0.07%--io_free_batch_list
+                          |          |                                                                                                  |          
+                          |          |                                                                                                   --0.06%--io_eventfd_signal
+                          |          |          
+                          |          |--0.17%--__irqentry_text_end
+                          |          |          
+                          |           --0.08%--__x86_indirect_thunk_rax
+                          |          
+                          |--0.46%--sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)
+                          |          |          
+                          |           --0.29%--sluice::async::UringAsyncBackend::TransportLedger::pop_front() (inlined)
+                          |          
+                          |--0.07%--sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)
+                          |          
+                           --0.06%--io_uring_submit
+                                     |          
+                                      --0.06%--__io_uring_flush_sq
+
+
+
+#
+# (Tip: To compute metrics for samples use perf record -e '{cycles,instructions}' ... ; perf script -F +metric)
+#

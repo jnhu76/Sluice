@@ -1,0 +1,10 @@
+== .xmake diff vs pre-session backup ==
+XMAKE_RESTORE_DIFF_CLEAN
+== .xmake xmake.conf sha256 ==
+2a234c8022e128c2e38a9dcc89bbafc6e2eb397718863a0607eb4510dd4b82fc  .xmake/linux/x86_64/xmake.conf
+== compile_commands.json sha256 ==
+91cb53cd829c87c49afac9eebf458b89c113386b343887ad66baf4af505866f1  compile_commands.json
+== git status ==
+?? docs/evidence/621-progress-wait-path-20261118/
+?? docs/evidence/621-round2-R1/
+?? docs/evidence/e5-fullpath-machine-work/

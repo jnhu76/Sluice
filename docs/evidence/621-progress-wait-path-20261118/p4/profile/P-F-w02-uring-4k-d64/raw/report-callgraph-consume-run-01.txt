@@ -1,0 +1,37 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 16K of event 'cycles'
+# Event count (approx.): 9475932130
+#
+# Children      Self  Command          Shared Object       Symbol                                                                                                                                         
+# ........  ........  ...............  ..................  ...............................................................................................................................................
+#
+     0.65%     0.00%  bench_w02_pipel  bench_w02_pipeline  [.] sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) (inlined)
+            |
+            ---sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) (inlined)
+               |          
+               |--0.17%--sluice::async::detail::RequestCore::try_reclaim_(sluice::async::detail::RequestCore::Slot&, unsigned long)
+               |          |          
+               |           --0.13%--sluice::async::detail::RequestCore::release_slot_(sluice::async::detail::RequestCore::Slot&, unsigned long) (inlined)
+               |          
+               |--0.13%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+               |          std::mutex::unlock() (inlined)
+               |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+               |          
+               |--0.10%--sluice::async::detail::RequestCore::resolve_public_(sluice::async::detail::RequestKey) (inlined)
+               |          |          
+               |           --0.07%--sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey) (inlined)
+               |          
+                --0.08%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+                          std::mutex::lock() (inlined)
+                          |          
+                           --0.06%--__gthread_mutex_lock(pthread_mutex_t*) (inlined)
+
+
+
+#
+# (Tip: Limit to show entries above 5% only: perf report --percent-limit 5)
+#

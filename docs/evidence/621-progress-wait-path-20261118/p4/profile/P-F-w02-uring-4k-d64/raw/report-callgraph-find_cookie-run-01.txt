@@ -1,0 +1,40 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 16K of event 'cycles'
+# Event count (approx.): 9475932130
+#
+# Children      Self  Command          Shared Object       Symbol                                                                             
+# ........  ........  ...............  ..................  ...................................................................................
+#
+     0.66%     0.56%  bench_w02_pipel  bench_w02_pipeline  [.] sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const
+            |          
+            |--0.56%--_start
+            |          __libc_start_main@@GLIBC_2.34
+            |          __libc_start_call_main
+            |          main
+            |          (anonymous namespace)::run_one_repetition(bench::EnvConfig const&, (anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned long, unsigned long, bool)
+            |          (anonymous namespace)::run_pipeline_phase((anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::Result<sluice::async::ScopeWaitStatus> sluice::async::RequestScope::wait_for_slot_<unsigned long>(sluice::async::RequestScope::Slot&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >) (inlined)
+            |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::AsyncIoContext::run_progress_pass_()
+            |          sluice::async::UringAsyncBackend::poll_progress()
+            |          sluice::async::UringAsyncBackend::poll() (inlined)
+            |          sluice::async::UringAsyncBackend::poll() [clone .part.0]
+            |          sluice::async::UringAsyncBackend::reap_cqes()
+            |          operator() (inlined)
+            |          sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)
+            |          sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const
+            |          
+             --0.10%--sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const
+                       |          
+                        --0.06%--asm_sysvec_reschedule_ipi
+
+
+
+#
+# (Tip: Skip collecting build-id when recording: perf record -B)
+#

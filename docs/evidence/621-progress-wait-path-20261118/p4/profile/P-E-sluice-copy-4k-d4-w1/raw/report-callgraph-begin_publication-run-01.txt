@@ -1,0 +1,104 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 34K of event 'cycles'
+# Event count (approx.): 14719584144
+#
+# Children      Self  Command      Shared Object  Symbol                                                                                                                                  
+# ........  ........  ...........  .............  ........................................................................................................................................
+#
+     1.39%     0.27%  sluice-copy  sluice-copy    [.] sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)
+            |          
+            |--0.75%--std::mutex::unlock() (inlined)
+            |          |          
+            |          |--0.58%--__gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |          
+            |          |          |--0.40%--0x40fcec
+            |          |          |          |          
+            |          |          |          |--0.31%--0x40fcec
+            |          |          |          |          |          
+            |          |          |          |          |--0.22%--0x7f616d251dc5
+            |          |          |          |          |          
+            |          |          |          |           --0.08%--0x7f9af5167ddc
+            |          |          |          |          
+            |          |          |           --0.08%--0x7f30df967da0
+            |          |          |          
+            |          |          |--0.10%--0x7f616d251ddc
+            |          |          |          
+            |          |           --0.08%--__GI___pthread_mutex_unlock_usercnt
+            |          |          
+            |           --0.16%--0x40fbf5
+            |                     0x40fbf5
+            |                     0x40fbf5
+            |                     |          
+            |                      --0.12%--0x7f616d25041a
+            |          
+            |--0.31%--0x40fbf5
+            |          |          
+            |          |--0.14%--0x40fbf5
+            |          |          |          
+            |          |           --0.10%--0x40fbf5
+            |          |                     |          
+            |          |                      --0.05%--0x40fbf5
+            |          |                                0x7f9afc13941a
+            |          |          
+            |          |--0.07%--0x40fcec
+            |          |          0x40fcec
+            |          |          0x40fcec
+            |          |          0x7f9afc13addc
+            |          |          
+            |           --0.05%--0x7f9afc13941a
+            |          
+             --0.27%--0x4020b4
+                       |          
+                       |--0.17%--0x7f616d1dd797
+                       |          0x7f616d1dd680
+                       |          0x401e0b
+                       |          0x403281
+                       |          0x4029af
+                       |          0x4029af
+                       |          0x4029af
+                       |          0x4029af
+                       |          0x4029af
+                       |          0x40ad02
+                       |          0x40ad02
+                       |          0x4083d2
+                       |          0x407b96
+                       |          0x406c91
+                       |          0x40d611
+                       |          0x40d315
+                       |          0x40fc28
+                       |          |          
+                       |           --0.13%--0x40fc28
+                       |          
+                        --0.06%--0x7f9af50f3797
+                                  0x7f9af50f3680
+                                  0x401e0b
+                                  0x403281
+                                  0x4029af
+                                  0x4029af
+                                  0x4029af
+                                  0x4029af
+                                  0x4029af
+                                  0x40ad02
+                                  0x40ad02
+                                  0x4083d2
+                                  0x407b96
+                                  0x406c91
+                                  0x40d611
+                                  0x40d315
+                                  0x40fc28
+
+     0.08%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)
+            |
+            ---__gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+               |          
+                --0.07%--__GI___pthread_mutex_unlock_usercnt
+
+
+
+#
+# (Tip: To set sample time separation other than 100ms with --sort time use --time-quantum)
+#

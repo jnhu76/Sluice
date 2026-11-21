@@ -1,0 +1,72 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 26K of event 'cycles'
+# Event count (approx.): 11572549879
+#
+# Children      Self  Command          Shared Object       Symbol                                                                                      
+# ........  ........  ...............  ..................  ............................................................................................
+#
+     1.95%     0.07%  bench_w02_pipel  bench_w02_pipeline  [.] sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)
+            |          
+            |--1.88%--sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)
+            |          |          
+            |          |--0.93%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          std::mutex::unlock() (inlined)
+            |          |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |          
+            |          |           --0.93%--__GI___pthread_mutex_unlock_usercnt
+            |          |                     |          
+            |          |                      --0.57%--__GI___lll_lock_wake
+            |          |                                |          
+            |          |                                |--0.26%--entry_SYSRETQ_unsafe_stack
+            |          |                                |          
+            |          |                                |--0.16%--entry_SYSCALL_64_after_hwframe
+            |          |                                |          |          
+            |          |                                |           --0.15%--do_syscall_64
+            |          |                                |                     |          
+            |          |                                |                      --0.13%--__x64_sys_futex
+            |          |                                |                                |          
+            |          |                                |                                 --0.13%--do_futex
+            |          |                                |                                           futex_wake
+            |          |                                |          
+            |          |                                |--0.07%--syscall_return_via_sysret
+            |          |                                |          
+            |          |                                 --0.06%--entry_SYSCALL_64
+            |          |          
+            |           --0.92%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |                     std::mutex::lock() (inlined)
+            |                     __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |                     pthread_mutex_lock@@GLIBC_2.2.5
+            |                     |          
+            |                      --0.36%--__GI___lll_lock_wait
+            |                                |          
+            |                                |--0.14%--entry_SYSRETQ_unsafe_stack
+            |                                |          
+            |                                 --0.10%--entry_SYSCALL_64_after_hwframe
+            |                                           |          
+            |                                            --0.10%--do_syscall_64
+            |                                                      |          
+            |                                                       --0.09%--__x64_sys_futex
+            |                                                                 |          
+            |                                                                  --0.09%--do_futex
+            |                                                                            |          
+            |                                                                             --0.08%--futex_wait
+            |                                                                                       |          
+            |                                                                                        --0.07%--__futex_wait
+            |                                                                                                  |          
+            |                                                                                                   --0.05%--futex_wait_setup
+            |          
+             --0.07%--__GI___clone3
+                       start_thread
+                       execute_native_thread_routine
+                       sluice::async::ThreadPoolBackend::worker_loop()
+                       sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)
+
+
+
+#
+# (Tip: Customize output of perf script with: perf script -F event,ip,sym)
+#

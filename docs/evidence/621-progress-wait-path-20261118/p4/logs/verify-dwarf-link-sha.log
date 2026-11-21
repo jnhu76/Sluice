@@ -1,0 +1,72 @@
+== git HEAD ==
+5d94f233967c3aef993eb19ba9e3252c532b0951
+?? docs/evidence/621-progress-wait-path-20261118/
+?? docs/evidence/621-round2-R1/
+?? docs/evidence/e5-fullpath-machine-work/
+== file ==
+/tmp/621-p4-build/ring/linux/x86_64/release/bench_w02_pipeline:        ELF 64-bit LSB executable, x86-64, version 1 (GNU/Linux), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=0dcc8b3a3302e5e356db0edfe538fed4954f0d5d, for GNU/Linux 3.2.0, with debug_info, not stripped
+/tmp/621-p4-build/ring/linux/x86_64/release/bench_w03_external_loop:   ELF 64-bit LSB executable, x86-64, version 1 (GNU/Linux), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=5fd4410c904635f02ebe964f9b0232097542cb93, for GNU/Linux 3.2.0, with debug_info, not stripped
+/tmp/621-p4-build/noring/linux/x86_64/release/bench_w02_pipeline:      ELF 64-bit LSB executable, x86-64, version 1 (GNU/Linux), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=4f206d78c987b84134f207cd33f98e20b16de1af, for GNU/Linux 3.2.0, with debug_info, not stripped
+/tmp/621-p4-build/noring/linux/x86_64/release/bench_w03_external_loop: ELF 64-bit LSB executable, x86-64, version 1 (GNU/Linux), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=32e995e365b8ee729be0cc549dbfe5757471a5ef, for GNU/Linux 3.2.0, with debug_info, not stripped
+/tmp/621-p4-build/copy/linux/x86_64/release/sluice-copy:               ELF 64-bit LSB executable, x86-64, version 1 (GNU/Linux), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=9b02d231149fc1cabef4a610aa35e7dd4850d01b, for GNU/Linux 3.2.0, with debug_info, not stripped
+== debug sections ==
+-- /tmp/621-p4-build/ring/linux/x86_64/release/bench_w02_pipeline
+  [32] .debug_info       PROGBITS         0000000000000000  00036b98
+  [33] .debug_abbrev     PROGBITS         0000000000000000  001ec750
+  [34] .debug_line       PROGBITS         0000000000000000  001fa32f
+  [36] .debug_line_str   PROGBITS         0000000000000000  002dd41b
+-- /tmp/621-p4-build/ring/linux/x86_64/release/bench_w03_external_loop
+  [32] .debug_info       PROGBITS         0000000000000000  00030b18
+  [33] .debug_abbrev     PROGBITS         0000000000000000  001bb22d
+  [34] .debug_line       PROGBITS         0000000000000000  001c7864
+  [36] .debug_line_str   PROGBITS         0000000000000000  00296441
+-- /tmp/621-p4-build/noring/linux/x86_64/release/bench_w02_pipeline
+  [32] .debug_info       PROGBITS         0000000000000000  0002daa8
+  [33] .debug_abbrev     PROGBITS         0000000000000000  0018ba9b
+  [34] .debug_line       PROGBITS         0000000000000000  001969b6
+  [36] .debug_line_str   PROGBITS         0000000000000000  00247785
+-- /tmp/621-p4-build/noring/linux/x86_64/release/bench_w03_external_loop
+  [32] .debug_info       PROGBITS         0000000000000000  00027a28
+  [33] .debug_abbrev     PROGBITS         0000000000000000  0015a578
+  [34] .debug_line       PROGBITS         0000000000000000  00163eeb
+  [36] .debug_line_str   PROGBITS         0000000000000000  00200792
+-- /tmp/621-p4-build/copy/linux/x86_64/release/sluice-copy
+  [32] .debug_info       PROGBITS         0000000000000000  0001a998
+  [33] .debug_abbrev     PROGBITS         0000000000000000  00109533
+  [34] .debug_line       PROGBITS         0000000000000000  001157d2
+  [36] .debug_line_str   PROGBITS         0000000000000000  00195edf
+== NEEDED ==
+-- /tmp/621-p4-build/ring/linux/x86_64/release/bench_w02_pipeline
+ 0x0000000000000001 (NEEDED)             Shared library: [liburing.so.2]
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+-- /tmp/621-p4-build/ring/linux/x86_64/release/bench_w03_external_loop
+ 0x0000000000000001 (NEEDED)             Shared library: [liburing.so.2]
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+-- /tmp/621-p4-build/noring/linux/x86_64/release/bench_w02_pipeline
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+-- /tmp/621-p4-build/noring/linux/x86_64/release/bench_w03_external_loop
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+-- /tmp/621-p4-build/copy/linux/x86_64/release/sluice-copy
+ 0x0000000000000001 (NEEDED)             Shared library: [liburing.so.2]
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+== sha256 ==
+e65a5766c08af7657ba2fe4d7957b2ba9d8e875fe29fc0b69edca316ca2eb9b8  /tmp/621-p4-build/ring/linux/x86_64/release/bench_w02_pipeline
+5bc33f861c1a7c6f6bfd498bb6a46af1dd2a7815b332aaae02b91d9d6b26ece4  /tmp/621-p4-build/ring/linux/x86_64/release/bench_w03_external_loop
+9f282a81d0bda6c5bda29467a02f406a1e8b6ef995ae102ab1f8de6bfd52e080  /tmp/621-p4-build/noring/linux/x86_64/release/bench_w02_pipeline
+2289999fd80ed21cb0211311ac2a4140fb203cac62e69537c7f6a6dd93034357  /tmp/621-p4-build/noring/linux/x86_64/release/bench_w03_external_loop
+959f8090aaeabf863208e9697a9fc0e76d53cc422843026f7d89d604ee593c54  /tmp/621-p4-build/copy/linux/x86_64/release/sluice-copy

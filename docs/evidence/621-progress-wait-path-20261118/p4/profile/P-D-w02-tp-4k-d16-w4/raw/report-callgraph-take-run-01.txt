@@ -1,0 +1,129 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 26K of event 'cycles'
+# Event count (approx.): 11572549879
+#
+# Children      Self  Command          Shared Object       Symbol                                                                                                                                                  
+# ........  ........  ...............  ..................  ........................................................................................................................................................
+#
+     2.40%     0.47%  bench_w02_pipel  bench_w02_pipeline  [.] sluice::async::RequestScope::take(sluice::async::ScopeTicket<unsigned long> const&)
+            |          
+            |--1.93%--sluice::async::RequestScope::take(sluice::async::ScopeTicket<unsigned long> const&)
+            |          sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+            |          sluice::async::Request<unsigned long>::take_result() (inlined)
+            |          sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+            |          |          
+            |           --1.89%--sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) (inlined)
+            |                     |          
+            |                     |--1.13%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |                     |          std::mutex::unlock() (inlined)
+            |                     |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |                     |          |          
+            |                     |           --1.06%--__GI___pthread_mutex_unlock_usercnt
+            |                     |                     |          
+            |                     |                      --0.32%--__GI___lll_lock_wake
+            |                     |                                |          
+            |                     |                                |--0.14%--entry_SYSRETQ_unsafe_stack
+            |                     |                                |          
+            |                     |                                |--0.10%--entry_SYSCALL_64_after_hwframe
+            |                     |                                |          do_syscall_64
+            |                     |                                |          |          
+            |                     |                                |           --0.09%--__x64_sys_futex
+            |                     |                                |                     |          
+            |                     |                                |                      --0.08%--do_futex
+            |                     |                                |                                |          
+            |                     |                                |                                 --0.07%--futex_wake
+            |                     |                                |          
+            |                     |                                 --0.06%--syscall_return_via_sysret
+            |                     |          
+            |                     |--0.47%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |                     |          std::mutex::lock() (inlined)
+            |                     |          |          
+            |                     |           --0.45%--__gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |                     |                     pthread_mutex_lock@@GLIBC_2.2.5
+            |                     |                     |          
+            |                     |                      --0.14%--__GI___lll_lock_wait
+            |                     |          
+            |                      --0.08%--sluice::async::detail::RequestCore::try_reclaim_(sluice::async::detail::RequestCore::Slot&, unsigned long)
+            |                                |          
+            |                                 --0.05%--sluice::async::detail::RequestCore::release_slot_(sluice::async::detail::RequestCore::Slot&, unsigned long) (inlined)
+            |          
+             --0.47%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       __libc_start_call_main
+                       main
+                       (anonymous namespace)::run_one_repetition(bench::EnvConfig const&, (anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned long, unsigned long, bool)
+                       (anonymous namespace)::run_pipeline_phase((anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)
+                       sluice::async::RequestScope::take(sluice::async::ScopeTicket<unsigned long> const&)
+                       |          
+                        --0.44%--sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+                                  |          
+                                  |--0.27%--sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+                                  |          |          
+                                  |           --0.24%--sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+                                  |                     |          
+                                  |                      --0.14%--sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&) (inlined)
+                                  |                                |          
+                                  |                                 --0.06%--sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&) (inlined)
+                                  |          
+                                   --0.14%--sluice::async::Request<unsigned long>::take_result() (inlined)
+
+     2.38%     0.00%  bench_w02_pipel  bench_w02_pipeline  [.] sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+            |
+            ---sluice::async::RequestObservation<unsigned long> sluice::async::RequestScope::take_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+               |          
+               |--2.08%--sluice::async::Request<unsigned long>::take_result() (inlined)
+               |          |          
+               |           --1.93%--sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+               |                     |          
+               |                      --1.89%--sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) (inlined)
+               |                                |          
+               |                                |--1.13%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+               |                                |          std::mutex::unlock() (inlined)
+               |                                |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+               |                                |          |          
+               |                                |           --1.06%--__GI___pthread_mutex_unlock_usercnt
+               |                                |                     |          
+               |                                |                      --0.32%--__GI___lll_lock_wake
+               |                                |                                |          
+               |                                |                                |--0.14%--entry_SYSRETQ_unsafe_stack
+               |                                |                                |          
+               |                                |                                |--0.10%--entry_SYSCALL_64_after_hwframe
+               |                                |                                |          do_syscall_64
+               |                                |                                |          |          
+               |                                |                                |           --0.09%--__x64_sys_futex
+               |                                |                                |                     |          
+               |                                |                                |                      --0.08%--do_futex
+               |                                |                                |                                |          
+               |                                |                                |                                 --0.07%--futex_wake
+               |                                |                                |          
+               |                                |                                 --0.06%--syscall_return_via_sysret
+               |                                |          
+               |                                |--0.47%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+               |                                |          std::mutex::lock() (inlined)
+               |                                |          |          
+               |                                |           --0.45%--__gthread_mutex_lock(pthread_mutex_t*) (inlined)
+               |                                |                     pthread_mutex_lock@@GLIBC_2.2.5
+               |                                |                     |          
+               |                                |                      --0.14%--__GI___lll_lock_wait
+               |                                |          
+               |                                 --0.08%--sluice::async::detail::RequestCore::try_reclaim_(sluice::async::detail::RequestCore::Slot&, unsigned long)
+               |                                           |          
+               |                                            --0.05%--sluice::async::detail::RequestCore::release_slot_(sluice::async::detail::RequestCore::Slot&, unsigned long) (inlined)
+               |          
+                --0.27%--sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+                          |          
+                           --0.24%--sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+                                     |          
+                                      --0.14%--sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&) (inlined)
+                                                |          
+                                                 --0.06%--sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&) (inlined)
+
+
+
+#
+# (Tip: To see list of saved events and attributes: perf evlist -v)
+#

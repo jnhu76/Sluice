@@ -1,0 +1,37 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 29K of event 'cycles'
+# Event count (approx.): 12992695735
+#
+# Children      Self  Command          Shared Object            Symbol                                                                                                                                         
+# ........  ........  ...............  .......................  ...............................................................................................................................................
+#
+     1.34%     0.00%  bench_w03_exter  bench_w03_external_loop  [.] sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) (inlined)
+            |
+            ---sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) (inlined)
+               |          
+               |--0.96%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+               |          std::mutex::unlock() (inlined)
+               |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+               |          |          
+               |           --0.94%--__GI___pthread_mutex_unlock_usercnt
+               |                     |          
+               |                     |--0.12%--__GI___lll_lock_wake
+               |                     |          |          
+               |                     |           --0.06%--entry_SYSRETQ_unsafe_stack
+               |                     |          
+               |                      --0.05%--asm_sysvec_reschedule_ipi
+               |          
+                --0.22%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+                          std::mutex::lock() (inlined)
+                          __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+                          pthread_mutex_lock@@GLIBC_2.2.5
+
+
+
+#
+# (Tip: System-wide collection from all CPUs: perf record -a)
+#

@@ -1,0 +1,11 @@
+== P1 release binaries: no DWARF, stripped ==
+/tmp/621-p1-build/ring/linux/x86_64/release/bench_w02_pipeline: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=5502b545cce828025c5f4b75f93f86bb5bd91c85, for GNU/Linux 3.2.0, stripped
+NO_DEBUG_SECTIONS /tmp/621-p1-build/ring/linux/x86_64/release/bench_w02_pipeline
+/tmp/621-p1-build/ring/linux/x86_64/release/bench_w03_external_loop: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=fc646cb3d0826e56600cda8fceeee5494715ebe2, for GNU/Linux 3.2.0, stripped
+NO_DEBUG_SECTIONS /tmp/621-p1-build/ring/linux/x86_64/release/bench_w03_external_loop
+/tmp/621-p1-build/noring/linux/x86_64/release/bench_w02_pipeline: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=88887a262f5f9704013ddb7ee21071a7c0196dbb, for GNU/Linux 3.2.0, stripped
+NO_DEBUG_SECTIONS /tmp/621-p1-build/noring/linux/x86_64/release/bench_w02_pipeline
+/tmp/621-p1-build/noring/linux/x86_64/release/bench_w03_external_loop: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=56ceecbc1807d6ae716c2deb175eea8665448adf, for GNU/Linux 3.2.0, stripped
+NO_DEBUG_SECTIONS /tmp/621-p1-build/noring/linux/x86_64/release/bench_w03_external_loop
+/tmp/621-p1-build/copy/linux/x86_64/release/sluice-copy: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=208e3068a01f4d777651b86cd0a6bf0aa1ea4ded, for GNU/Linux 3.2.0, stripped
+NO_DEBUG_SECTIONS /tmp/621-p1-build/copy/linux/x86_64/release/sluice-copy

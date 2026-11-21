@@ -1,0 +1,11 @@
+CMD: SLUICE_BENCH_WARMUP=1 SLUICE_BENCH_MEASURED=1 SLUICE_BENCH_CASE_FILTER='=W02-threadpool-4k-d16' SLUICE_BENCH_JSONL=/tmp/621-p1-smoke/smoke.jsonl SLUICE_BENCH_TMP_DIR=/tmp/621-p1-smoke /tmp/621-p1-build/ring/linux/x86_64/release/bench_w02_pipeline
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1 stats_wiring=off
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+
+=== W-02 complete, failing repetitions=0 ===
+SMOKE_EXIT=0
+--- jsonl ---
+1 /tmp/621-p1-smoke/smoke.jsonl

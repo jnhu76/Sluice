@@ -1,0 +1,44 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 29K of event 'cycles'
+# Event count (approx.): 12992695735
+#
+# Children      Self  Command          Shared Object            Symbol                                           
+# ........  ........  ...............  .......................  .................................................
+#
+     0.80%     0.06%  bench_w03_exter  bench_w03_external_loop  [.] sluice::async::detail::RequestCore::reserve()
+            |          
+            |--0.74%--sluice::async::detail::RequestCore::reserve()
+            |          |          
+            |          |--0.41%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          std::mutex::unlock() (inlined)
+            |          |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |          
+            |          |           --0.38%--__GI___pthread_mutex_unlock_usercnt
+            |          |                     |          
+            |          |                      --0.07%--__GI___lll_lock_wake
+            |          |          
+            |           --0.25%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |                     std::mutex::lock() (inlined)
+            |                     __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |                     pthread_mutex_lock@@GLIBC_2.2.5
+            |          
+             --0.06%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       __libc_start_call_main
+                       main
+                       (anonymous namespace)::run_one_repetition(bench::EnvConfig const&, (anonymous namespace)::LoopParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned long, unsigned long, bool)
+                       (anonymous namespace)::run_external_phase((anonymous namespace)::LoopParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)
+                       sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+                       sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+                       sluice::Result<sluice::async::detail::RequestKey> sluice::async::UringAsyncBackend::submit_request<sluice::async::ReadOp>(sluice::async::ReadOp, sluice::async::detail::OperationKind, sluice::async::detail::RequestOp) (inlined)
+                       sluice::async::detail::RequestCore::reserve()
+
+
+
+#
+# (Tip: To compare scalability of two workload samples use perf diff -c ratio file1 file2)
+#

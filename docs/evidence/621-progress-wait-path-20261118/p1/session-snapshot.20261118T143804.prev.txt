@@ -1,0 +1,128 @@
+# sluice621 session snapshot v1
+# generated: 2026-11-18T13:52:27+08:00
+cpu_count=20
+irqbalance_present=yes
+irqbalance_active=active
+irqbalance_enabled=enabled
+cpu0 governor=schedutil min=1200000 max=3500000
+cpu1 governor=schedutil min=1200000 max=3500000
+cpu2 governor=schedutil min=1200000 max=3500000
+cpu3 governor=schedutil min=1200000 max=3500000
+cpu4 governor=schedutil min=1200000 max=3500000
+cpu5 governor=schedutil min=1200000 max=3500000
+cpu6 governor=schedutil min=1200000 max=3500000
+cpu7 governor=schedutil min=1200000 max=3500000
+cpu8 governor=schedutil min=1200000 max=3500000
+cpu9 governor=schedutil min=1200000 max=3500000
+cpu10 governor=schedutil min=1200000 max=3500000
+cpu11 governor=schedutil min=1200000 max=3500000
+cpu12 governor=schedutil min=1200000 max=3500000
+cpu13 governor=schedutil min=1200000 max=3500000
+cpu14 governor=schedutil min=1200000 max=3500000
+cpu15 governor=schedutil min=1200000 max=3500000
+cpu16 governor=schedutil min=1200000 max=3500000
+cpu17 governor=schedutil min=1200000 max=3500000
+cpu18 governor=schedutil min=1200000 max=3500000
+cpu19 governor=schedutil min=1200000 max=3500000
+
+[freeze_state]
+governor_all_performance=yes
+irqbalance_active_after_freeze=inactive
+
+[freq_snapshot]
+cpu0 2893525
+cpu1 2893628
+cpu2 2893559
+cpu3 3500000
+cpu4 2893338
+cpu5 3500000
+cpu6 3500000
+cpu7 2892859
+cpu8 2895948
+cpu9 3500000
+cpu10 3500000
+cpu11 3500000
+cpu12 2894189
+cpu13 2894499
+cpu14 2893336
+cpu15 3500000
+cpu16 2895028
+cpu17 3500000
+cpu18 2893337
+cpu19 2893349
+
+[thermal_snapshot]
+thermal_zone0 x86_pkg_temp 47000
+thermal_zone1 iwlwifi_1 42000
+
+[ps_snapshot]
+    PID    PPID USER     COMMAND         %CPU %MEM
+  18641       1 root     fprintd          8.8  0.0
+  18636    2956 jnhu     bash             7.3  0.0
+   2956    2600 jnhu     zcode-cli        5.0  0.7
+   2600    2553 jnhu     node             1.3  0.3
+   2560    2528 jnhu     sshd-session     0.1  0.0
+   1168       1 systemd+ systemd-oomd     0.1  0.0
+      1       0 root     systemd          0.0  0.0
+   1449       1 root     containerd       0.0  0.0
+   1953       1 root     dockerd          0.0  0.1
+    551       2 root     btrfs-transacti  0.0  0.0
+   2553    2535 jnhu     node             0.0  0.1
+  15370       2 root     kworker/u80:33-  0.0  0.0
+  15343       2 root     kworker/u80:27-  0.0  0.0
+  11915       2 root     kworker/u80:3-b  0.0  0.0
+   4999       2 root     kworker/u80:4-e  0.0  0.0
+  15365       2 root     kworker/u80:31-  0.0  0.0
+   1234       1 root     NetworkManager   0.0  0.0
+   1955       1 root     rsyslogd         0.0  0.0
+   1076       2 root     irq/45-iwlwifi:  0.0  0.0
+   1254       1 root     udisksd          0.0  0.0
+   1445       1 root     tuned            0.0  0.0
+    685       1 root     systemd-journal  0.0  0.0
+   3097    2956 jnhu     zcode-cli        0.0  0.3
+   4328    4316 jnhu     MainThread       0.0  0.1
+   3207    2956 jnhu     npm exec @upsta  0.0  0.1
+   1232       1 root     firewalld        0.0  0.0
+   4316    2956 jnhu     npm exec @upsta  0.0  0.1
+   1226    1220 dbus     dbus-broker      0.0  0.0
+   3098    2956 jnhu     zcode-cli        0.0  0.3
+   3229    3207 jnhu     MainThread       0.0  0.1
+   3095    2956 jnhu     zcode-cli        0.0  0.3
+   3109    2956 jnhu     zcode-cli        0.0  0.3
+   2197    2021 plasmal+ kwin_wayland     0.0  0.3
+   3089    2956 jnhu     zcode-cli        0.0  0.3
+  15376       2 root     kworker/u80:36-  0.0  0.0
+     16       2 root     rcu_preempt      0.0  0.0
+   4253    2956 jnhu     zcode-cli        0.0  0.3
+   1244       1 polkitd  polkitd          0.0  0.0
+   1399       1 root     abrt-dump-journ  0.0  0.1
+
+[proc_stat]
+cpu  94998 41428 39840 14139004 21416 2833 3575 0 0 0
+cpu0 6622 11821 6862 690425 455 143 422 0 0 0
+cpu1 4077 2 1034 710690 749 102 303 0 0 0
+cpu2 6264 9789 5660 693673 1516 139 71 0 0 0
+cpu3 5365 1 1097 709153 1140 151 257 0 0 0
+cpu4 6064 9781 5793 692676 2604 145 51 0 0 0
+cpu5 5410 5 831 709496 1195 118 88 0 0 0
+cpu6 4595 9813 5721 695987 799 125 78 0 0 0
+cpu7 4851 22 768 710441 756 134 96 0 0 0
+cpu8 3927 9 771 711666 606 94 75 0 0 0
+cpu9 3829 20 707 711598 759 125 87 0 0 0
+cpu10 4370 17 1020 710634 820 163 227 0 0 0
+cpu11 3512 3 1106 711525 539 204 364 0 0 0
+cpu12 5234 9 968 710199 536 110 85 0 0 0
+cpu13 3189 0 854 712213 650 103 177 0 0 0
+cpu14 6249 10 1218 707074 2367 211 210 0 0 0
+cpu15 4177 2 1189 709280 2046 296 449 0 0 0
+cpu16 6164 35 1059 707967 1668 144 118 0 0 0
+cpu17 4171 14 843 710806 1101 101 114 0 0 0
+cpu18 3343 51 998 711955 577 104 169 0 0 0
+cpu19 3575 11 1332 711536 523 111 125 0 0 0
+intr 5041518 31 4 0 0 0 0 0 0 0 0 0 0 6 0 0 0 0 0 65 5999 0 0 0 0 0 0 1 0 1 0 1 0 230844 0 163 0 0 0 71 29 0 96 66 189 0 219041 462 54262 0 14956 303 14425 2247 171 2129 2829 28198 24887 250 5892 5130 3 0 670 734 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ctxt 5662216
+btime 1794973976
+processes 18954
+procs_running 1
+procs_blocked 0
+softirq 4030931 96 894533 51 557864 230598 0 36039 1577642 4270 729838

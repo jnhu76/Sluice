@@ -1,0 +1,286 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 34K of event 'cycles'
+# Event count (approx.): 14719584144
+#
+# Children      Self  Command      Shared Object  Symbol                                               
+# ........  ........  ...........  .............  .....................................................
+#
+     3.41%     0.20%  sluice-copy  sluice-copy    [.] sluice::async::ThreadPoolBackend::poll_progress()
+            |          
+            |--1.91%--0x40d44f
+            |          |          
+            |          |--0.98%--0x40d386
+            |          |          |          
+            |          |          |--0.42%--0x40fc1a
+            |          |          |          |          
+            |          |          |          |--0.20%--0x40fcec
+            |          |          |          |          0x40fcec
+            |          |          |          |          0x40fcec
+            |          |          |          |          |          
+            |          |          |          |           --0.20%--0x7f9afc13addc
+            |          |          |          |          
+            |          |          |          |--0.11%--0x40fbf5
+            |          |          |          |          0x40fbf5
+            |          |          |          |          0x40fbf5
+            |          |          |          |          0x7f9afc13941a
+            |          |          |          |          
+            |          |          |           --0.08%--0x40fc1a
+            |          |          |          
+            |          |          |--0.33%--0x40d386
+            |          |          |          |          
+            |          |          |          |--0.19%--0x4105e5
+            |          |          |          |          |          
+            |          |          |          |          |--0.09%--0x41057c
+            |          |          |          |          |          0x41057c
+            |          |          |          |          |          0x41057c
+            |          |          |          |          |          0x7f9afc1393f3
+            |          |          |          |          |          
+            |          |          |          |           --0.08%--0x4105e5
+            |          |          |          |                     0x4105e5
+            |          |          |          |                     0x4105e5
+            |          |          |          |                     |          
+            |          |          |          |                      --0.07%--0x7f9afc13adce
+            |          |          |          |          
+            |          |          |           --0.13%--0x40fe2c
+            |          |          |                     |          
+            |          |          |                      --0.06%--0x40fdd4
+            |          |          |                                0x40fdd4
+            |          |          |                                0x40fdd4
+            |          |          |                                |          
+            |          |          |                                 --0.06%--0x7f9afc13941a
+            |          |          |          
+            |          |           --0.17%--0x41049d
+            |          |                     |          
+            |          |                     |--0.07%--0x41049d
+            |          |                     |          0x41049d
+            |          |                     |          0x41049d
+            |          |                     |          |          
+            |          |                     |           --0.06%--0x7f9afc13addc
+            |          |                     |          
+            |          |                      --0.05%--0x41042c
+            |          |                                0x41042c
+            |          |                                0x41042c
+            |          |                                |          
+            |          |                                 --0.05%--0x7f9afc13941a
+            |          |          
+            |          |--0.41%--0x40d44f
+            |          |          0x40d44f
+            |          |          0x40d44f
+            |          |          |          
+            |          |           --0.40%--0x7f9afc139438
+            |          |          
+            |          |--0.34%--0x40d7a7
+            |          |          0x40d7a7
+            |          |          0x40d7a7
+            |          |          |          
+            |          |           --0.34%--0x7f9afc13addc
+            |          |          
+            |           --0.17%--0x40f051
+            |                     |          
+            |                     |--0.08%--0x40f044
+            |                     |          0x40f044
+            |                     |          0x40f044
+            |                     |          |          
+            |                     |           --0.07%--0x7f9afc13940f
+            |                     |          
+            |                      --0.08%--0x40f059
+            |                                0x40f059
+            |                                0x40f059
+            |                                |          
+            |                                 --0.07%--0x7f9afc13addc
+            |          
+            |--1.30%--sluice::async::ThreadPoolBackend::poll_progress()
+            |          |          
+            |          |--0.38%--sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)
+            |          |          |          
+            |          |          |--0.15%--sluice::async::ThreadPoolBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind) (inlined)
+            |          |          |          |          
+            |          |          |          |--0.07%--sluice::async::detail::RequestCore::retire_observer_delivery(sluice::async::detail::RequestKey)
+            |          |          |          |          
+            |          |          |           --0.06%--sluice::async::detail::RequestCore::claim_observer_delivery(sluice::async::detail::RequestKey)
+            |          |          |          
+            |          |          |--0.14%--sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)
+            |          |          |          |          
+            |          |          |           --0.06%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          |                     std::mutex::unlock() (inlined)
+            |          |          |                     __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |                     |          
+            |          |          |                      --0.05%--__GI___pthread_mutex_unlock_usercnt
+            |          |          |          
+            |          |           --0.08%--sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+            |          |          
+            |          |--0.29%--0x40d315
+            |          |          |          
+            |          |          |--0.13%--0x40fcec
+            |          |          |          |          
+            |          |          |           --0.06%--0x40fcec
+            |          |          |                     0x40fcec
+            |          |          |                     0x40fcec
+            |          |          |                     |          
+            |          |          |                      --0.05%--0x7f30df967ddc
+            |          |          |          
+            |          |          |--0.08%--0x40d3dd
+            |          |          |          
+            |          |           --0.06%--0x41042c
+            |          |          
+            |          |--0.19%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          std::mutex::unlock() (inlined)
+            |          |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |          
+            |          |           --0.19%--__GI___pthread_mutex_unlock_usercnt
+            |          |          
+            |          |--0.12%--0x40d44f
+            |          |          0x40d44f
+            |          |          0x40d44f
+            |          |          0x7f30df96641a
+            |          |          
+            |          |--0.11%--0x40d759
+            |          |          0x40d759
+            |          |          0x40d759
+            |          |          0x7f30df967ddc
+            |          |          
+            |          |--0.10%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |          std::mutex::lock() (inlined)
+            |          |          __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          
+            |           --0.06%--sluice::async::detail::RequestCore::outstanding_summary() const
+            |          
+             --0.20%--_start
+                       |          
+                       |--0.11%--0x7f9afc0c6797
+                       |          0x7f9afc0c6680
+                       |          0x401e0b
+                       |          0x403281
+                       |          0x4029af
+                       |          0x4029af
+                       |          0x4029af
+                       |          0x4029af
+                       |          0x4029af
+                       |          0x40ad02
+                       |          0x40ad02
+                       |          0x4083d2
+                       |          0x407b96
+                       |          0x406c91
+                       |          0x40d7b3
+                       |          |          
+                       |           --0.06%--0x40d4c6
+                       |          
+                        --0.05%--__libc_start_main@@GLIBC_2.34
+                                  __libc_start_call_main
+                                  main
+                                  sluice_copy::run_pipelined_copy(sluice::File const&, sluice::async::NativeFileRef const&, unsigned long, unsigned long, unsigned int, sluice_copy::SyncPolicy)
+                                  sluice_copy::run_pipelined_copy_with_context(sluice::File const&, sluice::async::NativeFileRef const&, unsigned long, unsigned long, unsigned int, sluice_copy::SyncPolicy, sluice::async::AsyncIoContext)
+                                  operator() (inlined)
+                                  run_body (inlined)
+                                  await_slot_write (inlined)
+                                  wait_take<long unsigned int> (inlined)
+                                  sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                                  sluice::Result<sluice::async::ScopeWaitStatus> sluice::async::RequestScope::wait_for_slot_<unsigned long>(sluice::async::RequestScope::Slot&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >) (inlined)
+                                  sluice::async::AsyncIoContext::wait_one()
+                                  sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                                  sluice::async::AsyncIoContext::run_progress_pass_()
+                                  sluice::async::ThreadPoolBackend::poll_progress()
+
+     1.78%     0.04%  sluice-copy  sluice-copy    [.] sluice::async::ThreadPoolBackend::poll_progress()
+            |          
+            |--0.79%--0x40d611
+            |          |          
+            |          |--0.43%--0x40d315
+            |          |          |          
+            |          |          |--0.14%--0x40d3dd
+            |          |          |          |          
+            |          |          |           --0.07%--0x41057c
+            |          |          |          
+            |          |          |--0.14%--0x40fcec
+            |          |          |          |          
+            |          |          |           --0.06%--0x40fcec
+            |          |          |                     0x40fcec
+            |          |          |                     0x40fcec
+            |          |          |                     0x7f9af5167ddc
+            |          |          |          
+            |          |           --0.06%--0x41048e
+            |          |          
+            |          |--0.14%--0x40d759
+            |          |          0x40d759
+            |          |          0x40d759
+            |          |          |          
+            |          |           --0.12%--0x7f9af5167ddc
+            |          |          
+            |           --0.14%--0x40d44f
+            |                     0x40d44f
+            |                     0x40d44f
+            |                     |          
+            |                      --0.14%--0x7f9af51663e7
+            |          
+            |--0.49%--0x40d44f
+            |          0x40d44f
+            |          |          
+            |          |--0.25%--0x40d44f
+            |          |          |          
+            |          |           --0.24%--0x7f9afc13941a
+            |          |          
+            |           --0.24%--0x7f9afc13941a
+            |          
+             --0.46%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+                       std::mutex::unlock() (inlined)
+                       |          
+                       |--0.29%--__gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+                       |          |          
+                       |          |--0.16%--0x7f9afc13addc
+                       |          |          
+                       |           --0.12%--__GI___pthread_mutex_unlock_usercnt
+                       |          
+                        --0.16%--0x7f9afc13addc
+
+     0.22%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::ThreadPoolBackend::poll_progress()
+            |
+            ---__gthread_mutex_lock(pthread_mutex_t*) (inlined)
+               |          
+                --0.22%--pthread_mutex_lock@@GLIBC_2.2.5
+
+     0.17%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::ThreadPoolBackend::poll_progress()
+            |
+            ---__gthread_mutex_lock(pthread_mutex_t*) (inlined)
+               |          
+                --0.16%--pthread_mutex_lock@@GLIBC_2.2.5
+
+     0.16%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::ThreadPoolBackend::poll_progress()
+            |
+            ---std::lock_guard<std::mutex>::~lock_guard() (inlined)
+               std::mutex::unlock() (inlined)
+               __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+               __GI___pthread_mutex_unlock_usercnt
+
+     0.15%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::ThreadPoolBackend::poll_progress()
+            |
+            ---__gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+               |          
+                --0.15%--__GI___pthread_mutex_unlock_usercnt
+
+     0.15%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::ThreadPoolBackend::poll_progress()
+            |
+            ---__gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+               |          
+                --0.14%--__GI___pthread_mutex_unlock_usercnt
+
+     0.14%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::ThreadPoolBackend::poll_progress()
+            |
+            ---__gthread_mutex_lock(pthread_mutex_t*) (inlined)
+               pthread_mutex_lock@@GLIBC_2.2.5
+
+     0.11%     0.00%  sluice-copy  sluice-copy    [.] sluice::async::ThreadPoolBackend::poll_progress()
+            |
+            ---__gthread_mutex_lock(pthread_mutex_t*) (inlined)
+               |          
+                --0.11%--pthread_mutex_lock@@GLIBC_2.2.5
+
+
+
+#
+# (Tip: When collecting LBR backtraces use --stitch-lbr to handle more than 32 deep entries: perf record --call-graph lbr ; perf report --stitch-lbr)
+#

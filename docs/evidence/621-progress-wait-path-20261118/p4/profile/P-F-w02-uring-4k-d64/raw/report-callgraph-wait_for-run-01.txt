@@ -1,0 +1,309 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 16K of event 'cycles'
+# Event count (approx.): 9475932130
+#
+# Children      Self  Command          Shared Object       Symbol                                                                                                                                                                                                      
+# ........  ........  ...............  ..................  ............................................................................................................................................................................................................
+#
+     4.81%     0.00%  bench_w02_pipel  bench_w02_pipeline  [.] sluice::Result<sluice::async::ScopeWaitStatus> sluice::async::RequestScope::wait_for_slot_<unsigned long>(sluice::async::RequestScope::Slot&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >) (inlined)
+            |
+            ---sluice::Result<sluice::async::ScopeWaitStatus> sluice::async::RequestScope::wait_for_slot_<unsigned long>(sluice::async::RequestScope::Slot&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >) (inlined)
+               |          
+               |--3.53%--sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               |          |          
+               |           --3.49%--sluice::async::AsyncIoContext::run_progress_pass_()
+               |                     |          
+               |                      --3.46%--sluice::async::UringAsyncBackend::poll_progress()
+               |                                |          
+               |                                 --3.43%--sluice::async::UringAsyncBackend::poll() (inlined)
+               |                                           sluice::async::UringAsyncBackend::poll() [clone .part.0]
+               |                                           |          
+               |                                           |--2.52%--sluice::async::UringAsyncBackend::reap_cqes()
+               |                                           |          |          
+               |                                           |           --2.50%--operator() (inlined)
+               |                                           |                     |          
+               |                                           |                     |--2.32%--sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)
+               |                                           |                     |          |          
+               |                                           |                     |          |--1.06%--sluice::async::UringAsyncBackend::finalize_operation_terminal_(sluice::async::UringAsyncBackend::RouterEntry&, unsigned long, sluice::detail::IoOutcome const&, sluice::FileInfo const*)
+               |                                           |                     |          |          |          
+               |                                           |                     |          |          |--0.25%--sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)
+               |                                           |                     |          |          |          
+               |                                           |                     |          |          |--0.20%--sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)
+               |                                           |                     |          |          |          |          
+               |                                           |                     |          |          |           --0.09%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+               |                                           |                     |          |          |                     std::mutex::unlock() (inlined)
+               |                                           |                     |          |          |                     __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+               |                                           |                     |          |          |                     |          
+               |                                           |                     |          |          |                      --0.06%--__GI___pthread_mutex_unlock_usercnt
+               |                                           |                     |          |          |          
+               |                                           |                     |          |           --0.12%--sluice::async::detail::RequestCore::offer_terminal(sluice::async::detail::RequestKey, sluice::async::detail::TerminalCandidate const&)
+               |                                           |                     |          |                     |          
+               |                                           |                     |          |                      --0.06%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+               |                                           |                     |          |                                std::mutex::lock() (inlined)
+               |                                           |                     |          |                                __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+               |                                           |                     |          |          
+               |                                           |                     |          |--0.64%--sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const
+               |                                           |                     |          |          |          
+               |                                           |                     |          |           --0.06%--asm_sysvec_reschedule_ipi
+               |                                           |                     |          |          
+               |                                           |                     |          |--0.14%--sluice::detail::IoOutcome::success(unsigned long) (inlined)
+               |                                           |                     |          |          
+               |                                           |                     |          |--0.06%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+               |                                           |                     |          |          std::mutex::lock() (inlined)
+               |                                           |                     |          |          __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+               |                                           |                     |          |          pthread_mutex_lock@@GLIBC_2.2.5
+               |                                           |                     |          |          
+               |                                           |                     |           --0.06%--std::vector<sluice::async::UringAsyncBackend::RouterEntry, std::allocator<sluice::async::UringAsyncBackend::RouterEntry> >::size() const (inlined)
+               |                                           |                     |          
+               |                                           |                      --0.06%--io_uring_cqe_seen (inlined)
+               |                                           |          
+               |                                            --0.79%--sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)
+               |                                                      |          
+               |                                                      |--0.32%--sluice::async::UringAsyncBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind) (inlined)
+               |                                                      |          |          
+               |                                                      |          |--0.16%--sluice::async::detail::RequestCore::retire_observer_delivery(sluice::async::detail::RequestKey)
+               |                                                      |          |          |          
+               |                                                      |          |           --0.08%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+               |                                                      |          |                     std::mutex::lock() (inlined)
+               |                                                      |          |                     __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+               |                                                      |          |                     |          
+               |                                                      |          |                      --0.06%--pthread_mutex_lock@@GLIBC_2.2.5
+               |                                                      |          |          
+               |                                                      |           --0.10%--sluice::async::detail::RequestCore::claim_observer_delivery(sluice::async::detail::RequestKey)
+               |                                                      |          
+               |                                                      |--0.19%--sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+               |                                                      |          |          
+               |                                                      |           --0.07%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+               |                                                      |                     std::mutex::lock() (inlined)
+               |                                                      |                     __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+               |                                                      |                     pthread_mutex_lock@@GLIBC_2.2.5
+               |                                                      |          
+               |                                                       --0.17%--sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)
+               |                                                                 |          
+               |                                                                  --0.06%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+               |                                                                            std::mutex::unlock() (inlined)
+               |                                                                            __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+               |          
+               |--0.77%--std::chrono::_V2::steady_clock::now()
+               |          |          
+               |           --0.67%--clock_gettime@@GLIBC_2.17
+               |                     |          
+               |                      --0.27%--0x7f7706a80a8c
+               |          
+                --0.36%--sluice::async::Request<unsigned long>::ready() const (inlined)
+                          |          
+                           --0.33%--sluice::async::detail::RequestBridge::ready(sluice::async::detail::RequestCore const*, sluice::async::RequestId const&)
+                                     |          
+                                      --0.30%--sluice::async::detail::RequestCore::lookup(sluice::async::detail::RequestKey) const (inlined)
+                                                |          
+                                                |--0.13%--sluice::async::detail::RequestCore::resolve_public_(sluice::async::detail::RequestKey) const (inlined)
+                                                |          |          
+                                                |           --0.08%--sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey) const (inlined)
+                                                |          
+                                                 --0.12%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+                                                           std::mutex::lock() (inlined)
+                                                           __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+                                                           |          
+                                                            --0.11%--pthread_mutex_lock@@GLIBC_2.2.5
+
+     3.43%     0.77%  bench_w02_pipel  bench_w02_pipeline  [.] sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          
+            |--2.67%--sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          |          
+            |          |--2.50%--sluice::Result<sluice::async::ScopeWaitStatus> sluice::async::RequestScope::wait_for_slot_<unsigned long>(sluice::async::RequestScope::Slot&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >) (inlined)
+            |          |          |          
+            |          |          |--1.89%--sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          |          |          |          
+            |          |          |           --1.87%--sluice::async::AsyncIoContext::run_progress_pass_()
+            |          |          |                     |          
+            |          |          |                      --1.84%--sluice::async::UringAsyncBackend::poll_progress()
+            |          |          |                                |          
+            |          |          |                                 --1.82%--sluice::async::UringAsyncBackend::poll() (inlined)
+            |          |          |                                           sluice::async::UringAsyncBackend::poll() [clone .part.0]
+            |          |          |                                           |          
+            |          |          |                                           |--1.35%--sluice::async::UringAsyncBackend::reap_cqes()
+            |          |          |                                           |          |          
+            |          |          |                                           |           --1.34%--operator() (inlined)
+            |          |          |                                           |                     |          
+            |          |          |                                           |                      --1.23%--sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)
+            |          |          |                                           |                                |          
+            |          |          |                                           |                                |--0.53%--sluice::async::UringAsyncBackend::finalize_operation_terminal_(sluice::async::UringAsyncBackend::RouterEntry&, unsigned long, sluice::detail::IoOutcome const&, sluice::FileInfo const*)
+            |          |          |                                           |                                |          |          
+            |          |          |                                           |                                |          |--0.12%--sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)
+            |          |          |                                           |                                |          |          
+            |          |          |                                           |                                |          |--0.08%--sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)
+            |          |          |                                           |                                |          |          
+            |          |          |                                           |                                |           --0.06%--sluice::async::detail::RequestCore::offer_terminal(sluice::async::detail::RequestKey, sluice::async::detail::TerminalCandidate const&)
+            |          |          |                                           |                                |          
+            |          |          |                                           |                                |--0.33%--sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const
+            |          |          |                                           |                                |          
+            |          |          |                                           |                                |--0.08%--sluice::detail::IoOutcome::success(unsigned long) (inlined)
+            |          |          |                                           |                                |          
+            |          |          |                                           |                                 --0.06%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |          |                                           |                                           std::mutex::lock() (inlined)
+            |          |          |                                           |                                           __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          |                                           |                                           pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          |                                           |          
+            |          |          |                                            --0.41%--sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)
+            |          |          |                                                      |          
+            |          |          |                                                      |--0.19%--sluice::async::UringAsyncBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind) (inlined)
+            |          |          |                                                      |          |          
+            |          |          |                                                      |          |--0.10%--sluice::async::detail::RequestCore::retire_observer_delivery(sluice::async::detail::RequestKey)
+            |          |          |                                                      |          |          
+            |          |          |                                                      |           --0.07%--sluice::async::detail::RequestCore::claim_observer_delivery(sluice::async::detail::RequestKey)
+            |          |          |                                                      |          
+            |          |          |                                                      |--0.11%--sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)
+            |          |          |                                                      |          
+            |          |          |                                                       --0.09%--sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+            |          |          |          
+            |          |          |--0.41%--std::chrono::_V2::steady_clock::now()
+            |          |          |          |          
+            |          |          |           --0.36%--clock_gettime@@GLIBC_2.17
+            |          |          |                     |          
+            |          |          |                      --0.12%--0x7f7706a80a8c
+            |          |          |          
+            |          |           --0.18%--sluice::async::Request<unsigned long>::ready() const (inlined)
+            |          |                     |          
+            |          |                      --0.18%--sluice::async::detail::RequestBridge::ready(sluice::async::detail::RequestCore const*, sluice::async::RequestId const&)
+            |          |                                |          
+            |          |                                 --0.16%--sluice::async::detail::RequestCore::lookup(sluice::async::detail::RequestKey) const (inlined)
+            |          |                                           |          
+            |          |                                           |--0.07%--sluice::async::detail::RequestCore::resolve_public_(sluice::async::detail::RequestKey) const (inlined)
+            |          |                                           |          
+            |          |                                            --0.06%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |                                                      std::mutex::lock() (inlined)
+            |          |                                                      __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          
+            |           --0.16%--sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+            |                     sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+            |          
+             --0.77%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       __libc_start_call_main
+                       main
+                       (anonymous namespace)::run_one_repetition(bench::EnvConfig const&, (anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned long, unsigned long, bool)
+                       (anonymous namespace)::run_pipeline_phase((anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)
+                       sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                       |          
+                        --0.70%--sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+                                  |          
+                                   --0.65%--sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+                                             |          
+                                             |--0.25%--sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&) (inlined)
+                                             |          |          
+                                             |           --0.09%--sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&) (inlined)
+                                             |          
+                                              --0.09%--std::add_pointer<sluice::async::Request<unsigned long> >::type std::get_if<sluice::async::Request<unsigned long>, std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> >(std::variant<std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> >*) (inlined)
+                                                        std::add_pointer<std::variant_alternative<1ul, std::variant<std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> > >::type>::type std::get_if<1ul, std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> >(std::variant<std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> >*) (inlined)
+
+     3.10%     0.70%  bench_w02_pipel  bench_w02_pipeline  [.] sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          
+            |--2.40%--sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          |          
+            |          |--2.26%--sluice::Result<sluice::async::ScopeWaitStatus> sluice::async::RequestScope::wait_for_slot_<unsigned long>(sluice::async::RequestScope::Slot&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >) (inlined)
+            |          |          |          
+            |          |          |--1.72%--sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          |          |          |          
+            |          |          |           --1.70%--sluice::async::AsyncIoContext::run_progress_pass_()
+            |          |          |                     |          
+            |          |          |                      --1.70%--sluice::async::UringAsyncBackend::poll_progress()
+            |          |          |                                |          
+            |          |          |                                 --1.68%--sluice::async::UringAsyncBackend::poll() (inlined)
+            |          |          |                                           sluice::async::UringAsyncBackend::poll() [clone .part.0]
+            |          |          |                                           |          
+            |          |          |                                           |--1.22%--sluice::async::UringAsyncBackend::reap_cqes()
+            |          |          |                                           |          |          
+            |          |          |                                           |           --1.20%--operator() (inlined)
+            |          |          |                                           |                     |          
+            |          |          |                                           |                      --1.13%--sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)
+            |          |          |                                           |                                |          
+            |          |          |                                           |                                |--0.54%--sluice::async::UringAsyncBackend::finalize_operation_terminal_(sluice::async::UringAsyncBackend::RouterEntry&, unsigned long, sluice::detail::IoOutcome const&, sluice::FileInfo const*)
+            |          |          |                                           |                                |          |          
+            |          |          |                                           |                                |          |--0.13%--sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)
+            |          |          |                                           |                                |          |          
+            |          |          |                                           |                                |          |--0.11%--sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)
+            |          |          |                                           |                                |          |          |          
+            |          |          |                                           |                                |          |           --0.08%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          |                                           |                                |          |                     std::mutex::unlock() (inlined)
+            |          |          |                                           |                                |          |                     __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |                                           |                                |          |                     |          
+            |          |          |                                           |                                |          |                      --0.06%--__GI___pthread_mutex_unlock_usercnt
+            |          |          |                                           |                                |          |          
+            |          |          |                                           |                                |           --0.06%--sluice::async::detail::RequestCore::offer_terminal(sluice::async::detail::RequestKey, sluice::async::detail::TerminalCandidate const&)
+            |          |          |                                           |                                |          
+            |          |          |                                           |                                |--0.32%--sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const
+            |          |          |                                           |                                |          
+            |          |          |                                           |                                 --0.06%--sluice::detail::IoOutcome::success(unsigned long) (inlined)
+            |          |          |                                           |          
+            |          |          |                                            --0.40%--sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)
+            |          |          |                                                      |          
+            |          |          |                                                      |--0.15%--sluice::async::UringAsyncBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind) (inlined)
+            |          |          |                                                      |          |          
+            |          |          |                                                      |           --0.08%--sluice::async::detail::RequestCore::retire_observer_delivery(sluice::async::detail::RequestKey)
+            |          |          |                                                      |          
+            |          |          |                                                      |--0.10%--sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+            |          |          |                                                      |          
+            |          |          |                                                       --0.08%--sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)
+            |          |          |          
+            |          |          |--0.38%--std::chrono::_V2::steady_clock::now()
+            |          |          |          |          
+            |          |          |           --0.32%--clock_gettime@@GLIBC_2.17
+            |          |          |                     |          
+            |          |          |                      --0.16%--0x7f7706a80a8c
+            |          |          |          
+            |          |           --0.15%--sluice::async::Request<unsigned long>::ready() const (inlined)
+            |          |                     sluice::async::detail::RequestBridge::ready(sluice::async::detail::RequestCore const*, sluice::async::RequestId const&)
+            |          |                     |          
+            |          |                      --0.13%--sluice::async::detail::RequestCore::lookup(sluice::async::detail::RequestKey) const (inlined)
+            |          |                                |          
+            |          |                                |--0.06%--sluice::async::detail::RequestCore::resolve_public_(sluice::async::detail::RequestKey) const (inlined)
+            |          |                                |          
+            |          |                                 --0.06%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |                                           std::mutex::lock() (inlined)
+            |          |                                           __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |                                           pthread_mutex_lock@@GLIBC_2.2.5
+            |          |          
+            |           --0.14%--sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+            |                     |          
+            |                      --0.13%--sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+            |          
+             --0.70%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       __libc_start_call_main
+                       main
+                       (anonymous namespace)::run_one_repetition(bench::EnvConfig const&, (anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned long, unsigned long, bool)
+                       (anonymous namespace)::run_pipeline_phase((anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)
+                       sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                       |          
+                       |--0.58%--sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+                       |          |          
+                       |           --0.56%--sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&) (inlined)
+                       |                     |          
+                       |                     |--0.18%--sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&) (inlined)
+                       |                     |          |          
+                       |                     |           --0.07%--sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&) (inlined)
+                       |                     |          
+                       |                      --0.09%--std::add_pointer<sluice::async::Request<unsigned long> >::type std::get_if<sluice::async::Request<unsigned long>, std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> >(std::variant<std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> >*) (inlined)
+                       |                                std::add_pointer<std::variant_alternative<1ul, std::variant<std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> > >::type>::type std::get_if<1ul, std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> >(std::variant<std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> >*) (inlined)
+                       |          
+                        --0.11%--sluice::Result<sluice::async::ScopeWaitStatus> sluice::async::RequestScope::wait_for_slot_<unsigned long>(sluice::async::RequestScope::Slot&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >) (inlined)
+
+     0.09%     0.00%  bench_w02_pipel  bench_w02_pipeline  [.] sluice::Result<sluice::async::ScopeWaitStatus> sluice::async::RequestScope::wait_for_slot_<unsigned long>(sluice::async::RequestScope::Slot&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >) (inlined)
+            |
+            ---sluice::Result<sluice::async::ScopeWaitStatus> sluice::async::RequestScope::wait_for_slot_<unsigned long>(sluice::async::RequestScope::Slot&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >) (inlined)
+               |          
+                --0.08%--sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                          sluice::async::AsyncIoContext::run_progress_pass_()
+                          sluice::async::UringAsyncBackend::poll_progress()
+                          sluice::async::UringAsyncBackend::poll() (inlined)
+                          sluice::async::UringAsyncBackend::poll() [clone .part.0]
+
+
+
+#
+# (Tip: For a higher level overview, try: perf report --sort comm,dso)
+#

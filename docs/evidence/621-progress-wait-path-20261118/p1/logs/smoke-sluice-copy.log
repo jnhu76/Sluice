@@ -1,0 +1,6 @@
+CMD: /tmp/621-p1-build/copy/linux/x86_64/release/sluice-copy --buffer-size 4096 --pipeline-depth 4 --workers 1 /tmp/621-p1-smoke/src-1m.bin /tmp/621-p1-smoke/dst-1m.bin
+/tmp/621-p1-build/copy/linux/x86_64/release/sluice-copy: copied 1048576 bytes (read_ops=260 write_ops=256 short_writes=0 sync=none pipeline_depth=4 atomic=on)
+SMOKE_EXIT=0
+--- dst sha256 ---
+00b0f54618b481189181276d5b498ac4349eb20de46af581df93e33197b8b88b  /tmp/621-p1-smoke/dst-1m.bin
+CMP_OK

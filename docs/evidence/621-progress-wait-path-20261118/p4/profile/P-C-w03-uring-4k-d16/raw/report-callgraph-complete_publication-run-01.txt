@@ -1,0 +1,43 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 29K of event 'cycles'
+# Event count (approx.): 12992695735
+#
+# Children      Self  Command          Shared Object            Symbol                                                                                         
+# ........  ........  ...............  .......................  ...............................................................................................
+#
+     0.43%     0.06%  bench_w03_exter  bench_w03_external_loop  [.] sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+            |          
+            |--0.37%--sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+            |          |          
+            |          |--0.23%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |          |          std::mutex::unlock() (inlined)
+            |          |          __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |          |          |          
+            |          |           --0.22%--__GI___pthread_mutex_unlock_usercnt
+            |          |          
+            |           --0.13%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |                     std::mutex::lock() (inlined)
+            |                     __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |                     pthread_mutex_lock@@GLIBC_2.2.5
+            |          
+             --0.06%--__GI___clone3
+                       start_thread
+                       execute_native_thread_routine
+                       (anonymous namespace)::driver_thread(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&)
+                       sluice::async::AsyncIoContext::poll_progress()
+                       sluice::async::AsyncIoContext::run_progress_pass_()
+                       sluice::async::UringAsyncBackend::poll_progress()
+                       sluice::async::UringAsyncBackend::poll() (inlined)
+                       sluice::async::UringAsyncBackend::poll() [clone .part.0]
+                       sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)
+                       sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+
+
+
+#
+# (Tip: To group events which need to be collected together for accuracy use {}: perf record -e {cycles,branches}' ...)
+#

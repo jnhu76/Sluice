@@ -1,0 +1,63 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 26K of event 'cycles'
+# Event count (approx.): 11572549879
+#
+# Children      Self  Command          Shared Object       Symbol                                           
+# ........  ........  ...............  ..................  .................................................
+#
+     1.38%     0.06%  bench_w02_pipel  bench_w02_pipeline  [.] sluice::async::detail::RequestCore::reserve()
+            |          
+            |--1.33%--sluice::async::detail::RequestCore::reserve()
+            |          |          
+            |          |--0.67%--std::lock_guard<std::mutex>::lock_guard(std::mutex&) (inlined)
+            |          |          std::mutex::lock() (inlined)
+            |          |          __gthread_mutex_lock(pthread_mutex_t*) (inlined)
+            |          |          |          
+            |          |           --0.66%--pthread_mutex_lock@@GLIBC_2.2.5
+            |          |                     |          
+            |          |                      --0.23%--__GI___lll_lock_wait
+            |          |                                |          
+            |          |                                |--0.07%--entry_SYSRETQ_unsafe_stack
+            |          |                                |          
+            |          |                                 --0.05%--entry_SYSCALL_64_after_hwframe
+            |          |                                           do_syscall_64
+            |          |          
+            |           --0.66%--std::lock_guard<std::mutex>::~lock_guard() (inlined)
+            |                     std::mutex::unlock() (inlined)
+            |                     __gthread_mutex_unlock(pthread_mutex_t*) (inlined)
+            |                     |          
+            |                      --0.64%--__GI___pthread_mutex_unlock_usercnt
+            |                                |          
+            |                                 --0.33%--__GI___lll_lock_wake
+            |                                           |          
+            |                                           |--0.14%--entry_SYSRETQ_unsafe_stack
+            |                                           |          
+            |                                            --0.14%--entry_SYSCALL_64_after_hwframe
+            |                                                      do_syscall_64
+            |                                                      |          
+            |                                                       --0.12%--__x64_sys_futex
+            |                                                                 |          
+            |                                                                  --0.11%--do_futex
+            |                                                                            futex_wake
+            |          
+             --0.06%--_start
+                       __libc_start_main@@GLIBC_2.34
+                       __libc_start_call_main
+                       main
+                       (anonymous namespace)::run_one_repetition(bench::EnvConfig const&, (anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned long, unsigned long, bool)
+                       (anonymous namespace)::run_pipeline_phase((anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)
+                       sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+                       sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+                       sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)
+                       sluice::Result<sluice::async::detail::RequestKey> sluice::async::ThreadPoolBackend::submit_request<sluice::async::ReadOp>(sluice::async::ReadOp, sluice::async::detail::OperationKind, sluice::async::detail::RequestOp) (inlined)
+                       sluice::async::detail::RequestCore::reserve()
+
+
+
+#
+# (Tip: To browse sample contexts use perf report --sample 10 and select in context menu)
+#
