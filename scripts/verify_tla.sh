@@ -363,6 +363,8 @@ run_clean shutdown-core-safety ShutdownCore.cfg ShutdownCore
 
 echo "== ShutdownCore: C++ mutation-seam mirrors (each must violate its named invariant) =="
 run_violate shutdown-core-mut-m1-destroy-ignores-closure ShutdownCoreMutM1DestroyIgnoresClosure.cfg ShutdownCore InvDestroyRequiresExecutionClosed
+
+echo "== ShutdownCore: model-only floor mutants (each must violate its named invariant) =="
 run_violate shutdown-core-mut-m6-snapshot-before-close ShutdownCoreMutM6SnapshotBeforeClose.cfg ShutdownCore InvNoAcceptAfterAdmissionClose
 run_violate shutdown-core-mut-m7-close-without-convergence ShutdownCoreMutM7CloseWithoutConvergence.cfg ShutdownCore InvExecutionClosedNoBorrowTouchingExecution
 run_violate shutdown-core-mut-m8-retire-fd-early ShutdownCoreMutM8RetireFdEarly.cfg ShutdownCore InvNotificationRetireRequiresNoDeliveryRefs
