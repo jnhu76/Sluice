@@ -337,6 +337,47 @@ bool zero_length_requests_make_no_native_call() {
     return ok;
 }
 
+bool non_empty_null_spans_reject_as_invalid_argument_without_a_native_call() {
+    std::string path;
+    std::optional<File> file_holder =
+        opened_with_content("abcdefgh", path, sluice::FileAccess::read_write);
+    if (!file_holder.has_value())
+        return false;
+    File& file = *file_holder;
+    const int fd = file.native_handle();
+    std::byte* const null_buffer = nullptr;
+    std::span<std::byte> dst(null_buffer, 4);
+    std::span<const std::byte> src(null_buffer, 4);
+
+    bool ok = true;
+    {
+        NativeScript script(kTransferCalls, fd, {{-1, EFAULT}, {-1, EFAULT}});
+        auto at = sluice::blocking::read_at(file, 0, dst);
+        auto cursor = sluice::blocking::read(file, dst);
+        auto at_write = sluice::blocking::write_at(file, 0, src);
+        auto cursor_write = sluice::blocking::write(file, src);
+        auto exact_at = sluice::blocking::read_exact_at(file, 0, dst);
+        auto exact = sluice::blocking::read_exact(file, dst);
+        auto all_at = sluice::blocking::write_all_at(file, 0, src);
+        auto all = sluice::blocking::write_all(file, src);
+        ok = ok && !at.has_value() && at.error().code == IoError::Code::invalid_argument;
+        ok = ok && !cursor.has_value() && cursor.error().code == IoError::Code::invalid_argument;
+        ok = ok && !at_write.has_value() &&
+             at_write.error().code == IoError::Code::invalid_argument;
+        ok = ok && !cursor_write.has_value() &&
+             cursor_write.error().code == IoError::Code::invalid_argument;
+        ok = ok && !exact_at.has_value() &&
+             exact_at.error().code == IoError::Code::invalid_argument;
+        ok = ok && !exact.has_value() && exact.error().code == IoError::Code::invalid_argument;
+        ok = ok && !all_at.has_value() &&
+             all_at.error().code == IoError::Code::invalid_argument;
+        ok = ok && !all.has_value() && all.error().code == IoError::Code::invalid_argument;
+        ok = ok && script.calls() == 0;
+    }
+    ::unlink(path.c_str());
+    return ok;
+}
+
 bool impossible_count_stops_immediately() {
     std::string path;
     std::optional<File> file_holder = opened_with_content("abcdefgh", path);
@@ -693,6 +734,8 @@ int main() {
         {"primitive_write_retries_eintr_then_stops_at_the_first_count",
          primitive_write_retries_eintr_then_stops_at_the_first_count},
         {"zero_length_requests_make_no_native_call", zero_length_requests_make_no_native_call},
+        {"non_empty_null_spans_reject_as_invalid_argument_without_a_native_call",
+         non_empty_null_spans_reject_as_invalid_argument_without_a_native_call},
         {"impossible_count_stops_immediately", impossible_count_stops_immediately},
         {"write_all_impossible_count_stops_immediately",
          write_all_impossible_count_stops_immediately},
