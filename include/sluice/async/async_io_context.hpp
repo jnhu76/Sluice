@@ -287,6 +287,10 @@ class AsyncIoContext {
     std::unique_ptr<AsyncBackend> backend_;
     AsyncStats* stats_;
 
+    template <class T, class Op>
+    Result<Request<T>> submit_op_(Op op,
+                                  Result<detail::RequestKey> (AsyncBackend::*accept)(Op));
+
     // Exhaustion closes admission before the epoch domain can wrap; the
     // source is a leaf and cannot reach the core itself.
     void close_admission_on_progress_exhaustion_() noexcept;
