@@ -296,7 +296,7 @@ Result<CopyStats> run_pipelined_copy(const File& src_file, const NativeFileRef& 
     try {
         return run_pipelined_copy_with_context(
             src_file, dst, buffer_size, pipeline_depth, workers, sync,
-            make_threadpool_context(ThreadPoolConfig{64, workers}));
+            make_threadpool_context(ThreadPoolConfig{kRequestCapacity, workers}));
     } catch (...) {
         return copy_exception();
     }
