@@ -429,7 +429,7 @@ bool external_poll_loop_threadpool_w03() {
     // A control wake carries no completion; the host observes the sticky
     // control as a wait outcome, acknowledges it, and only then may later
     // waits proceed.
-    ctx.interrupt_progress_waiters();
+    detail::TestAccess::context_progress_source(ctx)->interrupt();
     if (!host.wait_readable(std::chrono::milliseconds{5000}))
         return false;
     if (host.acknowledge_and_drive() != 0)
@@ -858,7 +858,7 @@ bool spurious_wake_is_harmless_and_completions_survive() {
     if (!host.pinned())
         return false;
 
-    ctx.interrupt_progress_waiters();
+    detail::TestAccess::context_progress_source(ctx)->interrupt();
     if (!host.wait_readable(std::chrono::milliseconds{5000}))
         return false;
     if (host.acknowledge_and_drive() != 0)
@@ -1078,7 +1078,7 @@ bool stale_detached_registration_cannot_authorize_a_new_context() {
         const int borrowed = ctx.progress_notification_fd();
         if (borrowed < 0)
             return false;
-        ctx.interrupt_progress_waiters();
+        detail::TestAccess::context_progress_source(ctx)->interrupt();
         if (!fd_readable(borrowed))
             return false;
         ctx.detach_progress_host();
@@ -1091,7 +1091,7 @@ bool stale_detached_registration_cannot_authorize_a_new_context() {
             return false;
         // Descriptor reuse is expected here but not contractually required;
         // the authority separation is what the contract requires.
-        ctx.interrupt_progress_waiters();
+        detail::TestAccess::context_progress_source(ctx)->interrupt();
         if (!fd_readable(fresh))
             return false;
         ctx.acknowledge_progress_notification();
@@ -1274,7 +1274,7 @@ bool idle_and_control_outcomes_are_distinct_and_sticky() {
         idle.value().completed != 0)
         return false;
 
-    ctx.interrupt_progress_waiters();
+    detail::TestAccess::context_progress_source(ctx)->interrupt();
     for (int round = 0; round < 3; ++round) {
         const auto control = ctx.wait_one(std::chrono::milliseconds{50});
         if (!control.has_value() || control.value().kind != WaitKind::control_interrupted)
@@ -1302,7 +1302,7 @@ bool control_before_wait_and_across_notification_ack_survives() {
     if (fd < 0)
         return false;
 
-    ctx.interrupt_progress_waiters();
+    detail::TestAccess::context_progress_source(ctx)->interrupt();
     ctx.acknowledge_progress_notification();
 
     using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
@@ -1334,13 +1334,13 @@ bool acknowledging_observed_control_keeps_a_later_control() {
 
     using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
 
-    ctx.interrupt_progress_waiters();
+    detail::TestAccess::context_progress_source(ctx)->interrupt();
     const auto observed_a = ctx.wait_one(std::chrono::milliseconds{100});
     if (!observed_a.has_value() || observed_a.value().kind != WaitKind::control_interrupted)
         return false;
 
     // B arrives before A is acknowledged.
-    ctx.interrupt_progress_waiters();
+    detail::TestAccess::context_progress_source(ctx)->interrupt();
 
     ctx.acknowledge_progress_control();
     const auto observed_b = ctx.wait_one(std::chrono::milliseconds{100});

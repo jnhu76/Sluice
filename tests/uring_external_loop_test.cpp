@@ -296,7 +296,7 @@ bool external_poll_loop_uring_w03() {
     // Control wake with zero completions: the host acks, observes the sticky
     // control as a wait outcome, acknowledges it, and keeps serving later
     // real work.
-    ctx.interrupt_progress_waiters();
+    detail::TestAccess::context_progress_source(ctx)->interrupt();
     if (!host.wait_and_service(std::chrono::milliseconds{5000}))
         return false;
     if (host.acknowledge_and_drive() != 0)

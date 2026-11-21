@@ -544,7 +544,7 @@ bool cancel_then_drain_shutdown_cancels_pending_without_fabricated_success(Track
             made.backend->inject_cqe_for_test(*cookie, 32);
             made.backend->inject_cqe_for_test(kControlTag | *cookie, 0);
         }
-        ctx.interrupt_progress_waiters();
+        detail::TestAccess::context_progress_source(ctx)->interrupt();
     });
     fire.store(true, std::memory_order_release);
 
@@ -1142,7 +1142,7 @@ bool consumed_binding_control_pin_retires_without_new_io(Tracker& t) {
         while (!fire.load(std::memory_order_acquire)) {
         }
         made.backend->inject_cqe_for_test(kControlTag | *cookie, 0);
-        ctx.interrupt_progress_waiters();
+        detail::TestAccess::context_progress_source(ctx)->interrupt();
     });
     fire.store(true, std::memory_order_release);
 
