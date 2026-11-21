@@ -1,5 +1,7 @@
 #include "safe_output.hpp"
 
+#include "fd_guard.hpp"
+
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
@@ -19,16 +21,19 @@ namespace {
 
 using sluice::IoError;
 
-struct ScopedFd {
-    int fd = -1;
-    explicit ScopedFd(int f) : fd(f) {}
-    ~ScopedFd() {
-        if (fd >= 0)
-            ::close(fd);
+SafeOpenFailure map_source_failure(detail::SourceFailure f) {
+    switch (f) {
+    case detail::SourceFailure::open:
+        return SafeOpenFailure::src_open;
+    case detail::SourceFailure::stat:
+        return SafeOpenFailure::src_stat;
+    case detail::SourceFailure::not_regular:
+        return SafeOpenFailure::src_not_regular;
+    case detail::SourceFailure::none:
+        break;
     }
-    ScopedFd(const ScopedFd&) = delete;
-    ScopedFd& operator=(const ScopedFd&) = delete;
-};
+    return SafeOpenFailure::none;
+}
 
 SafeOpenOutcome fail(SafeOpenFailure f, IoError e) {
     SafeOpenOutcome o;
@@ -58,19 +63,12 @@ int directory_fsync(int fd) {
 }
 
 SafeOpenOutcome open_atomic_copy(const std::string& src_path, const std::string& dst_path) {
-    auto src_open = sluice::File::open(src_path);
-    if (!src_open.has_value()) {
-        return fail(SafeOpenFailure::src_open, src_open.error());
+    auto src = detail::open_regular_source(src_path);
+    if (src.failure != detail::SourceFailure::none) {
+        return fail(map_source_failure(src.failure), src.error);
     }
-    sluice::File src_file = std::move(src_open).value();
-
-    struct stat src_stat{};
-    if (::fstat(src_file.native_handle(), &src_stat) != 0) {
-        return fail(SafeOpenFailure::src_stat, sluice::from_errno_value(errno));
-    }
-    if (!S_ISREG(src_stat.st_mode)) {
-        return fail(SafeOpenFailure::src_not_regular, IoError{IoError::Code::invalid_state});
-    }
+    sluice::File src_file = std::move(*src.file);
+    const struct stat& src_stat = src.stat;
 
     struct stat dst_stat{};
     if (::stat(dst_path.c_str(), &dst_stat) == 0) {
@@ -93,7 +91,7 @@ SafeOpenOutcome open_atomic_copy(const std::string& src_path, const std::string&
     if (temp_fd < 0) {
         return fail(SafeOpenFailure::temp_create, sluice::from_errno_value(errno));
     }
-    ScopedFd temp_guard(temp_fd);
+    detail::ScopedFd temp_guard(temp_fd);
     std::string temp_path(buf.data());
 
     mode_t mode = static_cast<mode_t>(src_stat.st_mode & 0777);
@@ -171,7 +169,7 @@ sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o, const std::string& d
                 *stage = SafeCommitStage::dir_sync;
             return sluice::make_unexpected<void>(sluice::from_errno_value(errno));
         }
-        ScopedFd dir_guard(dir_fd);
+        detail::ScopedFd dir_guard(dir_fd);
 
         int rc = 0;
         do {

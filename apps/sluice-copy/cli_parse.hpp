@@ -30,6 +30,4 @@ bool parse_sync(const char* s, SyncPolicy& out);
 
 int parse_args(int argc, char** argv, CliArgs& args);
 
-const char* code_name(sluice::IoError::Code c);
-
 }

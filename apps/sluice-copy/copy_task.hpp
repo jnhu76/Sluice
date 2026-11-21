@@ -24,6 +24,7 @@ constexpr std::size_t kMaxBufferSize = 64 * 1024 * 1024;
 constexpr std::size_t kMaxPipelineDepth = 64;
 constexpr std::size_t kMaxPipelineBytes = 512 * 1024 * 1024;
 constexpr unsigned kMaxWorkers = 64;
+constexpr std::size_t kRequestCapacity = kMaxPipelineDepth;
 
 inline bool valid_config(std::size_t buffer_size, std::size_t pipeline_depth, unsigned workers) {
     return buffer_size != 0 && pipeline_depth != 0 && workers != 0 &&

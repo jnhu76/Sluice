@@ -139,23 +139,4 @@ int parse_args(int argc, char** argv, CliArgs& args) {
     return 0;
 }
 
-const char* code_name(sluice::IoError::Code c) {
-    switch (c) {
-    case sluice::IoError::Code::eof:
-        return "eof";
-    case sluice::IoError::Code::canceled:
-        return "canceled";
-    case sluice::IoError::Code::no_space:
-        return "no_space";
-    case sluice::IoError::Code::permission_denied:
-        return "permission_denied";
-    case sluice::IoError::Code::invalid_state:
-        return "invalid_state";
-    case sluice::IoError::Code::backend_error:
-        return "backend_error";
-    default:
-        return "io_error";
-    }
-}
-
 }

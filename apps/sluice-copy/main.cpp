@@ -1,5 +1,6 @@
 #include "cli_parse.hpp"
 #include "copy_task.hpp"
+#include "fd_guard.hpp"
 #include "file_domain.hpp"
 #include "safe_output.hpp"
 
@@ -12,6 +13,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <string>
+#include <string_view>
 #include <unistd.h>
 
 namespace {
@@ -23,21 +25,11 @@ using sluice_copy::SyncPolicy;
 using sluice_copy::cli::CliArgs;
 using sluice_copy::cli::parse_args;
 
-struct ScopedFd {
-    int fd = -1;
-    explicit ScopedFd(int f) : fd(f) {}
-    ~ScopedFd() {
-        if (fd >= 0)
-            ::close(fd);
-    }
-    ScopedFd(const ScopedFd&) = delete;
-    ScopedFd& operator=(const ScopedFd&) = delete;
-};
-
 void print_copy_result(const char* prog, const Result<CopyStats>& result) {
     IoError e = result.error();
-    std::fprintf(stderr, "%s: copy failed: %s%s%s%s\n", prog, sluice_copy::cli::code_name(e.code),
-                 e.os_errno ? " (" : "", e.os_errno ? std::strerror(e.os_errno) : "",
+    const std::string_view name = sluice::to_string(e.code);
+    std::fprintf(stderr, "%s: copy failed: %.*s%s%s%s\n", prog, static_cast<int>(name.size()),
+                 name.data(), e.os_errno ? " (" : "", e.os_errno ? std::strerror(e.os_errno) : "",
                  e.os_errno ? ")" : "");
 }
 
@@ -82,12 +74,14 @@ int main(int argc, char** argv) {
                                         ? "destination already replaced; rename durability NOT "
                                           "guaranteed"
                                         : "destination untouched";
-            std::fprintf(stderr, "%s: atomic commit failed at %s (%s): %s%s%s%s\n", argv[0],
+            const std::string_view code = sluice::to_string(e.code);
+            std::fprintf(stderr, "%s: atomic commit failed at %s (%s): %.*s%s%s%s\n", argv[0],
                          stage == sluice_copy::SafeCommitStage::close    ? "close"
                          : stage == sluice_copy::SafeCommitStage::rename ? "rename"
                                                                          : "directory fsync",
-                         dst_state, sluice_copy::cli::code_name(e.code), e.os_errno ? " (" : "",
-                         e.os_errno ? std::strerror(e.os_errno) : "", e.os_errno ? ")" : "");
+                         dst_state, static_cast<int>(code.size()), code.data(),
+                         e.os_errno ? " (" : "", e.os_errno ? std::strerror(e.os_errno) : "",
+                         e.os_errno ? ")" : "");
             return 2;
         }
 
@@ -114,7 +108,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "\n");
         return (oc.failure == sluice_copy::OpenCopyFailure::same_file) ? 1 : 2;
     }
-    ScopedFd dst_guard(oc.dst_fd);
+    sluice_copy::detail::ScopedFd dst_guard(oc.dst_fd);
 
     if (::ftruncate(oc.dst_fd, 0) != 0) {
         std::fprintf(stderr, "%s: cannot truncate destination '%s': %s\n", argv[0],

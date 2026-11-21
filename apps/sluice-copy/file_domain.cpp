@@ -1,5 +1,7 @@
 #include "file_domain.hpp"
 
+#include "fd_guard.hpp"
+
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
@@ -13,16 +15,19 @@ namespace {
 
 using sluice::IoError;
 
-struct ScopedFd {
-    int fd = -1;
-    explicit ScopedFd(int f) : fd(f) {}
-    ~ScopedFd() {
-        if (fd >= 0)
-            ::close(fd);
+OpenCopyFailure map_source_failure(detail::SourceFailure f) {
+    switch (f) {
+    case detail::SourceFailure::open:
+        return OpenCopyFailure::src_open;
+    case detail::SourceFailure::stat:
+        return OpenCopyFailure::src_stat;
+    case detail::SourceFailure::not_regular:
+        return OpenCopyFailure::src_not_regular;
+    case detail::SourceFailure::none:
+        break;
     }
-    ScopedFd(const ScopedFd&) = delete;
-    ScopedFd& operator=(const ScopedFd&) = delete;
-};
+    return OpenCopyFailure::none;
+}
 
 OpenCopyOutcome fail(OpenCopyFailure f, IoError e) {
     OpenCopyOutcome o;
@@ -34,25 +39,18 @@ OpenCopyOutcome fail(OpenCopyFailure f, IoError e) {
 }
 
 OpenCopyOutcome open_copy_files(const std::string& src_path, const std::string& dst_path) {
-    auto src_open = sluice::File::open(src_path);
-    if (!src_open.has_value()) {
-        return fail(OpenCopyFailure::src_open, src_open.error());
+    auto src = detail::open_regular_source(src_path);
+    if (src.failure != detail::SourceFailure::none) {
+        return fail(map_source_failure(src.failure), src.error);
     }
-    sluice::File src_file = std::move(src_open).value();
-
-    struct stat src_stat{};
-    if (::fstat(src_file.native_handle(), &src_stat) != 0) {
-        return fail(OpenCopyFailure::src_stat, sluice::from_errno_value(errno));
-    }
-    if (!S_ISREG(src_stat.st_mode)) {
-        return fail(OpenCopyFailure::src_not_regular, IoError{IoError::Code::invalid_state});
-    }
+    sluice::File src_file = std::move(*src.file);
+    const struct stat& src_stat = src.stat;
 
     int dst_fd = ::open(dst_path.c_str(), O_WRONLY | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0644);
     if (dst_fd < 0) {
         return fail(OpenCopyFailure::dst_open, sluice::from_errno_value(errno));
     }
-    ScopedFd dst_guard(dst_fd);
+    detail::ScopedFd dst_guard(dst_fd);
 
     struct stat dst_stat{};
     if (::fstat(dst_fd, &dst_stat) != 0) {
