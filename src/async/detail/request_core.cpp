@@ -195,7 +195,6 @@ AcceptAttempt RequestCore::accept(RequestReservation reservation,
     slot->phase = SlotPhase::accepted;
     slot->binding_live = true;
     slot->execution_claimed = false;
-    slot->cancel_intent_layout_pad = 0;
     slot->descriptor = descriptor;
     slot->borrow = borrow;
     slot->execution_refs = 1;
@@ -603,8 +602,6 @@ void RequestCore::release_slot_(Slot& slot, std::size_t index) noexcept {
     slot.published = false;
     slot.publication_inflight = false;
     slot.execution_claimed = false;
-    slot.cancel_intent_layout_pad = 0;
-    slot.zero_op_layout_pad = 0;
 #if !defined(SLUICE_REQUEST_CORE_MUTANT_RELEASE_SKIPS_OBSERVER_CLEAR)
     slot.observer_phase = ObserverPhase::unattached;
 #endif

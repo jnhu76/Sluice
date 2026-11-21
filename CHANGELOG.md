@@ -58,6 +58,31 @@ accumulates under `[Unreleased]`).
   be enumerated by this repository (disclosed per D3, not assumed absent) —
   such code will fail to compile and must pin a prior release or call
   `has_split_wait_capability()`.
+- **async_io_context.hpp: two zero-consumer public accessors removed
+  (#643, AUD-013/AUD-014).** Removed
+  `sluice::async::AsyncIoContext::stats()` (the `const AsyncStats*` accessor)
+  and `sluice::async::AsyncIoContext::ObserverCancelResult::retired()` from
+  `include/sluice/async/async_io_context.hpp`. This is an intentional
+  source-breaking public API contraction under owner decisions D2/D3
+  (v2 root §23.4) and the root's minimum-justified-mechanism rule (PROD-01):
+  both members had zero consumers in-tree — production, applications, tests,
+  benchmarks, scripts and the clean-room package consumers — verified by
+  repository-wide search. `stats()` was a second read path over `AsyncStats`;
+  every caller that needs the counters holds the `AsyncStats` object it passes
+  to the context factory and reads it directly. `retired()` duplicated the
+  direct status comparison `status == ObserverCancelStatus::retired`, which is
+  how the installed consumer surface already expresses the same question.
+  Observable behavior is unchanged: `AsyncStats` is still populated — the
+  private `stats_` member, the factory parameter and the backend
+  `attach_stats` chain are untouched — and `ObserverCancelStatus`,
+  `ObserverAttachment::armed()`, `ObserverCancelResult::in_progress()` and
+  `delivery_retired()` are unchanged. The header set is unchanged
+  (`sluice/async/async_io_context.hpp` remains one of the 11 installed public
+  headers). No compatibility alias or shim is provided (D3: no v1
+  compatibility obligations); external consumers of the removed members, if
+  any exist, cannot be enumerated by this repository (disclosed per D3, not
+  assumed absent) — such code will fail to compile and must pin a prior
+  release or compare `ObserverCancelStatus::retired` directly.
 
 ### Performance
 

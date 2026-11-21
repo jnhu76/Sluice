@@ -20,7 +20,6 @@ enum class SafeOpenFailure : std::uint8_t {
     dst_not_regular,
     same_file,
 
-    temp_dir,
     temp_create,
     temp_chmod,
 };

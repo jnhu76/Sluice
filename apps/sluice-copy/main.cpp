@@ -36,8 +36,9 @@ struct ScopedFd {
 
 void print_copy_result(const char* prog, const Result<CopyStats>& result) {
     IoError e = result.error();
-    std::fprintf(stderr, "%s: copy failed: %s%s%s\n", prog, sluice_copy::cli::code_name(e.code),
-                 e.os_errno ? " (" : "", e.os_errno ? std::strerror(e.os_errno) : "");
+    std::fprintf(stderr, "%s: copy failed: %s%s%s%s\n", prog, sluice_copy::cli::code_name(e.code),
+                 e.os_errno ? " (" : "", e.os_errno ? std::strerror(e.os_errno) : "",
+                 e.os_errno ? ")" : "");
 }
 
 }
@@ -81,12 +82,12 @@ int main(int argc, char** argv) {
                                         ? "destination already replaced; rename durability NOT "
                                           "guaranteed"
                                         : "destination untouched";
-            std::fprintf(stderr, "%s: atomic commit failed at %s (%s): %s%s%s\n", argv[0],
+            std::fprintf(stderr, "%s: atomic commit failed at %s (%s): %s%s%s%s\n", argv[0],
                          stage == sluice_copy::SafeCommitStage::close    ? "close"
                          : stage == sluice_copy::SafeCommitStage::rename ? "rename"
                                                                          : "directory fsync",
                          dst_state, sluice_copy::cli::code_name(e.code), e.os_errno ? " (" : "",
-                         e.os_errno ? std::strerror(e.os_errno) : "");
+                         e.os_errno ? std::strerror(e.os_errno) : "", e.os_errno ? ")" : "");
             return 2;
         }
 
