@@ -377,22 +377,7 @@ Result<CancelDisposition> AsyncIoContext::cancel(const RequestId& id) {
     if (!backend_) {
         return make_unexpected<CancelDisposition>(IoError{IoError::Code::invalid_state});
     }
-    const detail::RequestKey key{detail::ContextIdentity{id.context_},
-                                 detail::SlotIndex{id.slot_},
-                                 detail::Generation{id.generation_}};
-    switch (backend_->cancel_identity(key)) {
-    case detail::PublicCancel::won_before_execution:
-        return CancelDisposition::won_before_execution;
-    case detail::PublicCancel::requested:
-        return CancelDisposition::requested;
-    case detail::PublicCancel::already_terminal:
-        return CancelDisposition::already_terminal;
-    case detail::PublicCancel::not_found:
-        return CancelDisposition::not_found;
-    case detail::PublicCancel::physical_interruption_unsupported:
-        return CancelDisposition::physical_interruption_unsupported;
-    }
-    return CancelDisposition::not_found;
+    return detail::RequestBridge::cancel(backend_.get(), id);
 }
 
 RequestReadiness AsyncIoContext::lookup(const RequestId& id) const {
