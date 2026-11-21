@@ -584,10 +584,6 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
             return make_unexpected<ProgressWaitOutcome>(
                 IoError{IoError::Code::invalid_state});
         }
-    }
-
-    {
-        std::lock_guard<std::mutex> lk(access_mtx_);
         if (stats_)
             ++stats_->wait_calls;
     }
